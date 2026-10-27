@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { Modal, Input, Button, Badge } from "@/shared/components";
+import ProviderAvatarPicker from "./ProviderAvatarPicker";
+import { getProviderNodeDefaultIconId } from "@/shared/utils/providerIcon";
 
 const DEFAULT_BASE_URL = "https://api.openai.com/v1";
 
@@ -13,6 +15,7 @@ export default function AddCustomEmbeddingModal({ isOpen, onClose, onCreated, on
     name: "",
     prefix: "",
     baseUrl: DEFAULT_BASE_URL,
+    iconId: "",
   });
   const [submitting, setSubmitting] = useState(false);
   const [checkKey, setCheckKey] = useState("");
@@ -30,9 +33,10 @@ export default function AddCustomEmbeddingModal({ isOpen, onClose, onCreated, on
         name: node.name || "",
         prefix: node.prefix || "",
         baseUrl: node.baseUrl || DEFAULT_BASE_URL,
+        iconId: node.iconId || "",
       });
     } else {
-      setFormData({ name: "", prefix: "", baseUrl: DEFAULT_BASE_URL });
+      setFormData({ name: "", prefix: "", baseUrl: DEFAULT_BASE_URL, iconId: "" });
     }
   }, [isOpen, isEdit, node]);
 
@@ -46,6 +50,7 @@ export default function AddCustomEmbeddingModal({ isOpen, onClose, onCreated, on
         name: formData.name,
         prefix: formData.prefix,
         baseUrl: formData.baseUrl,
+        iconId: formData.iconId,
       };
       if (!isEdit) payload.type = "custom-embedding";
 
@@ -110,6 +115,12 @@ export default function AddCustomEmbeddingModal({ isOpen, onClose, onCreated, on
   return (
     <Modal isOpen={isOpen} title={isEdit ? "Edit Custom Embedding" : "Add Custom Embedding"} onClose={onClose}>
       <div className="flex flex-col gap-4">
+        <ProviderAvatarPicker
+          value={formData.iconId}
+          defaultIconId={getProviderNodeDefaultIconId({ type: "custom-embedding" })}
+          onChange={(iconId) => setFormData((prev) => ({ ...prev, iconId }))}
+          disabled={submitting}
+        />
         <Input
           label="Name"
           value={formData.name}
@@ -179,5 +190,6 @@ AddCustomEmbeddingModal.propTypes = {
     name: PropTypes.string,
     prefix: PropTypes.string,
     baseUrl: PropTypes.string,
+    iconId: PropTypes.string,
   }),
 };

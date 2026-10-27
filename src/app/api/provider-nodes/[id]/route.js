@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { deleteProviderConnectionsByProvider, deleteProviderNode, getProviderConnections, getProviderNodeById, updateProviderConnection, updateProviderNode } from "@/models";
+import { normalizeProviderNodeIconId } from "@/lib/providerIcons";
 
 // PUT /api/provider-nodes/[id] - Update provider node
 export async function PUT(request, { params }) {
@@ -30,6 +31,9 @@ export async function PUT(request, { params }) {
       return NextResponse.json({ error: "Base URL is required" }, { status: 400 });
     }
 
+    const { iconId, error } = normalizeProviderNodeIconId(body.iconId);
+    if (error) return NextResponse.json({ error }, { status: 400 });
+
     let sanitizedBaseUrl = baseUrl.trim();
     
     // Sanitize Base URL for Anthropic Compatible
@@ -53,6 +57,7 @@ export async function PUT(request, { params }) {
       prefix: prefix.trim(),
       baseUrl: sanitizedBaseUrl,
     };
+    if (iconId !== undefined) updates.iconId = iconId;
 
     if (node.type === "openai-compatible") {
       updates.apiType = apiType;

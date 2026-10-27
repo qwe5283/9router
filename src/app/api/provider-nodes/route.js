@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createProviderNode, getProviderNodes } from "@/models";
 import { OPENAI_COMPATIBLE_PREFIX, ANTHROPIC_COMPATIBLE_PREFIX, CUSTOM_EMBEDDING_PREFIX } from "@/shared/constants/providers";
 import { generateId } from "@/shared/utils";
+import { normalizeProviderNodeIconId } from "@/lib/providerIcons";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +43,9 @@ export async function POST(request) {
       return NextResponse.json({ error: "Prefix is required" }, { status: 400 });
     }
 
+    const { iconId, error } = normalizeProviderNodeIconId(body.iconId);
+    if (error) return NextResponse.json({ error }, { status: 400 });
+
     // Determine type
     const nodeType = type || "openai-compatible";
 
@@ -57,6 +61,7 @@ export async function POST(request) {
         apiType,
         baseUrl: (baseUrl || OPENAI_COMPATIBLE_DEFAULTS.baseUrl).trim(),
         name: name.trim(),
+        iconId,
       });
       return NextResponse.json({ node }, { status: 201 });
     }
@@ -74,6 +79,7 @@ export async function POST(request) {
         prefix: prefix.trim(),
         baseUrl: sanitizedBaseUrl,
         name: name.trim(),
+        iconId,
       });
       return NextResponse.json({ node }, { status: 201 });
     }
@@ -92,6 +98,7 @@ export async function POST(request) {
         prefix: prefix.trim(),
         baseUrl: sanitizedBaseUrl,
         name: name.trim(),
+        iconId,
       });
       return NextResponse.json({ node }, { status: 201 });
     }

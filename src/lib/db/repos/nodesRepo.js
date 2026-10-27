@@ -62,6 +62,7 @@ export async function createProviderNode(data) {
     prefix: data.prefix,
     apiType: data.apiType,
     baseUrl: data.baseUrl,
+    ...(data.iconId !== undefined ? { iconId: data.iconId } : {}),
     createdAt: now,
     updatedAt: now,
   };

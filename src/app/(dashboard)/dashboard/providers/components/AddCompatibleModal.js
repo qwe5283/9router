@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { Badge, Button, Input, Modal, Select } from "@/shared/components";
+import ProviderAvatarPicker from "@/shared/components/ProviderAvatarPicker";
+import { getProviderNodeDefaultIconId } from "@/shared/utils/providerIcon";
 
 const VARIANT_CONFIG = {
   openai: {
@@ -41,6 +43,7 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
     prefix: "",
     ...(config.hasApiType ? { apiType: "chat" } : {}),
     baseUrl: config.defaultBaseUrl,
+    iconId: "",
   });
 
   const [formData, setFormData] = useState(initialFormData);
@@ -74,6 +77,7 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
           ...(config.hasApiType ? { apiType: formData.apiType } : {}),
           baseUrl: formData.baseUrl,
           type: config.type,
+          iconId: formData.iconId,
         }),
       });
       const data = await res.json();
@@ -136,6 +140,12 @@ function AddCompatibleModal({ variant, isOpen, onClose, onCreated }) {
   return (
     <Modal isOpen={isOpen} title={config.title} onClose={onClose}>
       <div className="flex flex-col gap-4">
+        <ProviderAvatarPicker
+          value={formData.iconId}
+          defaultIconId={getProviderNodeDefaultIconId({ type: config.type, apiType: formData.apiType })}
+          onChange={(iconId) => setFormData((prev) => ({ ...prev, iconId }))}
+          disabled={submitting}
+        />
         <Input
           label="Name"
           value={formData.name}

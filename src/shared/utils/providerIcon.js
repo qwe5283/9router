@@ -42,6 +42,16 @@ export function getProviderIconSrc(providerId) {
   return id ? `/providers/${id}.png` : null;
 }
 
+export function getProviderNodeDefaultIconId(node) {
+  if (node.type === "anthropic-compatible") return "anthropic-m";
+  if (node.type === "custom-embedding") return "openai";
+  return node.apiType === "responses" ? "oai-r" : "oai-cc";
+}
+
+export function getProviderNodeIconSrc(node) {
+  return getProviderIconSrc(node.iconId || getProviderNodeDefaultIconId(node));
+}
+
 /** Call from img onError so later mounts skip the request. */
 export function markProviderIconMissing(providerId) {
   const id = normalizeId(providerId);

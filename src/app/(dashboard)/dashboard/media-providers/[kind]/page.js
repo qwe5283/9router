@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Card, Badge, Button, Toggle, AddCustomEmbeddingModal } from "@/shared/components";
 import ProviderIcon from "@/shared/components/ProviderIcon";
+import { getProviderNodeIconSrc } from "@/shared/utils/providerIcon";
 import { MEDIA_PROVIDER_KINDS, AI_PROVIDERS, getProvidersByKind } from "@/shared/constants/providers";
 
 // Kinds that support combos (currently disabled for image/tts — temporarily hidden).
@@ -61,7 +62,8 @@ function MediaProviderCard({ provider, kind, connections, isCustom, onToggle }) 
               style={{ backgroundColor: `${provider.color?.length > 7 ? provider.color : (provider.color ?? "#888") + "15"}` }}
             >
               <ProviderIcon
-                src={`/providers/${provider.id}.png`}
+                key={provider.iconSrc || provider.id}
+                src={provider.iconSrc || `/providers/${provider.id}.png`}
                 alt={provider.name}
                 size={30}
                 className="object-contain rounded-lg max-w-[30px] max-h-[30px]"
@@ -187,6 +189,7 @@ export default function MediaProviderKindPage() {
     name: n.name || "Custom Embedding",
     color: "#6366F1",
     textIcon: "CE",
+    iconSrc: getProviderNodeIconSrc(n),
   }));
 
   const allProviders = [...providers, ...customProviders];

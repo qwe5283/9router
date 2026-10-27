@@ -10,7 +10,7 @@ import {
   Toggle,
 } from "@/shared/components";
 import ProviderIcon from "@/shared/components/ProviderIcon";
-import { getProviderIconSrc } from "@/shared/utils/providerIcon";
+import { getProviderIconSrc, getProviderNodeIconSrc } from "@/shared/utils/providerIcon";
 import { OAUTH_PROVIDERS, APIKEY_PROVIDERS } from "@/shared/constants/config";
 import {
   FREE_PROVIDERS,
@@ -271,6 +271,8 @@ export default function ProvidersPage() {
       color: "#10A37F",
       textIcon: "OC",
       apiType: node.apiType,
+      type: node.type,
+      iconId: node.iconId,
     }))
     .filter(
       (p) => matchSearch(p.name) && matchStatus(getProviderStats(p.id, "apikey")),
@@ -283,6 +285,8 @@ export default function ProvidersPage() {
       name: node.name || "Anthropic Compatible",
       color: "#D97757",
       textIcon: "AC",
+      type: node.type,
+      iconId: node.iconId,
     }))
     .filter(
       (p) => matchSearch(p.name) && matchStatus(getProviderStats(p.id, "apikey")),
@@ -837,11 +841,7 @@ function ApiKeyProviderCard({
   };
 
   const getIconPath = () => {
-    if (isCompatible && provider.apiType)
-      return provider.apiType === "responses"
-        ? "/providers/oai-r.png"
-        : "/providers/oai-cc.png";
-    if (isAnthropicCompatible) return "/providers/anthropic-m.png";
+    if (isCompatible || isAnthropicCompatible) return getProviderNodeIconSrc(provider);
     return getProviderIconSrc(provider.id);
   };
 
@@ -860,6 +860,7 @@ function ApiKeyProviderCard({
               }}
             >
               <ProviderIcon
+                key={getIconPath()}
                 src={getIconPath()}
                 alt={provider.name}
                 size={30}

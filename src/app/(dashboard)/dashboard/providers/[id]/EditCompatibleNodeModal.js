@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { Button, Badge, Input, Modal, Select } from "@/shared/components";
+import ProviderAvatarPicker from "@/shared/components/ProviderAvatarPicker";
+import { getProviderNodeDefaultIconId } from "@/shared/utils/providerIcon";
 
 export default function EditCompatibleNodeModal({ isOpen, node, onSave, onClose, isAnthropic }) {
   const [formData, setFormData] = useState({
@@ -10,6 +12,7 @@ export default function EditCompatibleNodeModal({ isOpen, node, onSave, onClose,
     prefix: "",
     apiType: "chat",
     baseUrl: "https://api.openai.com/v1",
+    iconId: "",
   });
   const [saving, setSaving] = useState(false);
   const [checkKey, setCheckKey] = useState("");
@@ -18,15 +21,16 @@ export default function EditCompatibleNodeModal({ isOpen, node, onSave, onClose,
   const [validationResult, setValidationResult] = useState(null);
 
   useEffect(() => {
-    if (node) {
+    if (isOpen && node) {
       setFormData({
         name: node.name || "",
         prefix: node.prefix || "",
         apiType: node.apiType || "chat",
         baseUrl: node.baseUrl || (isAnthropic ? "https://api.anthropic.com/v1" : "https://api.openai.com/v1"),
+        iconId: node.iconId || "",
       });
     }
-  }, [node, isAnthropic]);
+  }, [node, isAnthropic, isOpen]);
 
   const apiTypeOptions = [
     { value: "chat", label: "Chat Completions" },
@@ -41,6 +45,7 @@ export default function EditCompatibleNodeModal({ isOpen, node, onSave, onClose,
         name: formData.name,
         prefix: formData.prefix,
         baseUrl: formData.baseUrl,
+        iconId: formData.iconId,
       };
       if (!isAnthropic) {
         payload.apiType = formData.apiType;
@@ -78,6 +83,12 @@ export default function EditCompatibleNodeModal({ isOpen, node, onSave, onClose,
   return (
     <Modal isOpen={isOpen} title={`Edit ${isAnthropic ? "Anthropic" : "OpenAI"} Compatible`} onClose={onClose}>
       <div className="flex flex-col gap-4">
+        <ProviderAvatarPicker
+          value={formData.iconId}
+          defaultIconId={getProviderNodeDefaultIconId({ type: isAnthropic ? "anthropic-compatible" : "openai-compatible", apiType: formData.apiType })}
+          onChange={(iconId) => setFormData((prev) => ({ ...prev, iconId }))}
+          disabled={saving}
+        />
         <Input
           label="Name"
           value={formData.name}
@@ -154,6 +165,7 @@ EditCompatibleNodeModal.propTypes = {
     prefix: PropTypes.string,
     apiType: PropTypes.string,
     baseUrl: PropTypes.string,
+    iconId: PropTypes.string,
   }),
   onSave: PropTypes.func.isRequired,
   onClose: PropTypes.func.isRequired,
