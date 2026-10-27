@@ -19,6 +19,10 @@ function isAnthropicCompatible(provider) {
   return typeof provider === "string" && provider.startsWith(ANTHROPIC_COMPATIBLE_PREFIX);
 }
 
+export function isCompatibleProvider(provider) {
+  return isOpenAICompatible(provider) || isAnthropicCompatible(provider);
+}
+
 // Resolve the API type (chat vs responses) for an openai-compatible node.
 // The stored apiType on the connection's providerSpecificData (kept in sync with
 // the node on create/update) is authoritative. Falls back to the node ID

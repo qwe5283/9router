@@ -28,6 +28,7 @@ import { getProjectIdForConnection } from "open-sse/services/projectId.js";
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers.js";
 import { getKeyAccessContext, enforceKeyAccess, filterAdapterModels } from "../services/keyAccess.js";
 import { resolveSmartChoice } from "../services/systemoneRouter.js";
+import { isCompatibleProvider } from "open-sse/services/provider.js";
 
 /**
  * Handle chat completion request
@@ -48,7 +49,7 @@ export async function handleChat(request, clientRawRequest = null) {
     const url = new URL(request.url);
     clientRawRequest = {
       endpoint: url.pathname,
-      body,
+      body: structuredClone(body),
       headers: Object.fromEntries(request.headers.entries())
     };
   }
@@ -102,7 +103,11 @@ export async function handleChat(request, clientRawRequest = null) {
   // Bypass naming/warmup requests before combo rotation to avoid wasting rotation slots
   const userAgent = request?.headers?.get("user-agent") || "";
   const bypassResponse = handleBypassRequest(body, modelStr, userAgent, !!settings.ccFilterNaming);
-  if (bypassResponse) return bypassResponse.response || bypassResponse;
+  if (bypassResponse) {
+    const { provider } = await getModelInfo(modelStr);
+    const passthrough = isCompatibleProvider(provider) && settings.providerOverrides?.[provider]?.passthrough === true;
+    if (!passthrough) return bypassResponse.response || bypassResponse;
+  }
 
   const requiredCapabilities = detectRequiredCapabilities(body);
 

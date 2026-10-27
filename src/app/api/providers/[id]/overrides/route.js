@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSettings, updateSettings } from "@/lib/localDb";
 import { PROVIDERS } from "open-sse/config/providers.js";
 import { resolveProviderAlias } from "open-sse/services/model.js";
+import { isCompatibleProvider } from "open-sse/services/provider.js";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +24,16 @@ const BLOCKED_HEADERS = new Set([
 
 /**
  * Validate + normalize an override payload. Returns { override } or { error }.
- * An override with no headers is normalized to null (= delete).
+ * Update supplied fields independently so headers and passthrough can be saved separately.
  */
-function normalizeOverride({ headers }) {
-  const out = {};
+function normalizeOverride({ headers, passthrough }, current) {
+  const out = { ...current };
+
+  if (passthrough !== undefined) {
+    if (typeof passthrough !== "boolean") return { error: "passthrough must be a boolean" };
+    if (passthrough) out.passthrough = true;
+    else delete out.passthrough;
+  }
 
   if (headers !== undefined && headers !== null) {
     if (typeof headers !== "object" || Array.isArray(headers)) {
@@ -53,6 +60,7 @@ function normalizeOverride({ headers }) {
       clean[name] = value;
     }
     if (Object.keys(clean).length) out.headers = clean;
+    else delete out.headers;
   }
 
   return { override: Object.keys(out).length ? out : null };
@@ -77,6 +85,7 @@ export async function GET(request, { params }) {
     return NextResponse.json({
       headers: override.headers || {},
       builtinHeaders: PROVIDERS[canonical]?.headers || {},
+      passthrough: override.passthrough === true,
     });
   } catch (error) {
     console.log("Error getting provider overrides:", error);
@@ -85,24 +94,30 @@ export async function GET(request, { params }) {
 }
 
 /**
- * PUT /api/providers/[id]/overrides — body: { headers: {name: value} }
+ * PUT /api/providers/[id]/overrides — body: { headers?: {name: value}, passthrough?: boolean }
  * Empty payload clears the override.
  */
 export async function PUT(request, { params }) {
   try {
     const { id } = await params;
     const canonical = resolveProviderAlias(id);
-    const body = await request.json().catch(() => ({}));
-    const { override, error } = normalizeOverride(body);
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Expected an override object" }, { status: 400 });
+    }
+    if (body.passthrough !== undefined && !isCompatibleProvider(canonical)) {
+      return NextResponse.json({ error: "Passthrough is only supported for compatible providers" }, { status: 400 });
+    }
+    const current = await readOverrides();
+    const { override, error } = normalizeOverride(body, Object.keys(body).length ? current[canonical] : {});
     if (error) {
       return NextResponse.json({ error }, { status: 400 });
     }
-    const current = await readOverrides();
     const next = { ...current };
     if (override) next[canonical] = override;
     else delete next[canonical];
     await updateSettings({ providerOverrides: next });
-    return NextResponse.json({ headers: override?.headers || {} });
+    return NextResponse.json({ headers: override?.headers || {}, passthrough: override?.passthrough === true });
   } catch (error) {
     console.log("Error saving provider overrides:", error);
     return NextResponse.json({ error: "Failed to save overrides" }, { status: 500 });

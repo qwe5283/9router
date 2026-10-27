@@ -27,6 +27,7 @@ import CustomConfigCard from "./CustomConfigCard";
 import AutoPingScheduleModal from "./AutoPingScheduleModal";
 import WebLoginButton, { WEB_LOGIN_PROVIDERS } from "../components/WebLoginButton.js";
 import { getScheduleSlotLabels } from "@/shared/services/quotaPingSchedule";
+import { useNotificationStore } from "@/store/notificationStore";
 
 const ONE_BY_ONE_DELAY_MS = 1000;
 
@@ -43,6 +44,7 @@ export default function ProviderDetailPage() {
   const params = useParams();
   const router = useRouter();
   const providerId = params.id;
+  const notify = useNotificationStore();
   const { getCaps } = useModelCaps();
   const [connections, setConnections] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -70,6 +72,8 @@ export default function ProviderDetailPage() {
   const [bulkProxyPoolId, setBulkProxyPoolId] = useState("__none__");
   const [bulkUpdatingProxy, setBulkUpdatingProxy] = useState(false);
   const [providerStrategy, setProviderStrategy] = useState(null);
+  const [passthroughEnabled, setPassthroughEnabled] = useState(false);
+  const [savingPassthrough, setSavingPassthrough] = useState(false);
   const [providerStickyLimit, setProviderStickyLimit] = useState("");
   const [thinkingMode, setThinkingMode] = useState("auto");
   const [autoPing, setAutoPing] = useState({ enabled: false, connections: {}, schedules: {} });
@@ -328,6 +332,7 @@ export default function ProviderDetailPage() {
       // Load per-provider strategy override
       const override = (settingsData.providerStrategies || {})[providerId] || {};
       setProviderStrategy(override.fallbackStrategy || null);
+      setPassthroughEnabled(settingsData.providerOverrides?.[providerId]?.passthrough === true);
       setProviderStickyLimit(override.stickyRoundRobinLimit != null ? String(override.stickyRoundRobinLimit) : "1");
       // Load per-provider thinking config
       const thinkingCfg = (settingsData.providerThinking || {})[providerId] || {};
@@ -414,6 +419,24 @@ export default function ProviderDetailPage() {
     if (enabled && !providerStickyLimit) setProviderStickyLimit("1");
     setProviderStrategy(strategy);
     saveProviderStrategy(strategy, sticky);
+  };
+
+  const handlePassthroughToggle = async (enabled) => {
+    setSavingPassthrough(true);
+    try {
+      const res = await fetch(`/api/providers/${providerId}/overrides`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passthrough: enabled }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save passthrough setting");
+      setPassthroughEnabled(data.passthrough === true);
+    } catch (error) {
+      notify.error(error.message || "Failed to save passthrough setting");
+    } finally {
+      setSavingPassthrough(false);
+    }
   };
 
   const handleStickyLimitChange = (value) => {
@@ -1592,6 +1615,17 @@ export default function ProviderDetailPage() {
                   </div>
                 )}
               </div>
+              {isCompatible && (
+                <div className="flex items-center gap-2" title="仅替换上游模型名，其余请求体字段保持原样；请确保请求格式与上游一致。">
+                  <span className="text-xs text-text-muted font-medium">透传</span>
+                  <Toggle
+                    ariaLabel="透传"
+                    checked={passthroughEnabled}
+                    onChange={handlePassthroughToggle}
+                    disabled={savingPassthrough}
+                  />
+                </div>
+              )}
             </div>
           </div>
 
