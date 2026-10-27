@@ -129,7 +129,13 @@ export class BaseExecutor {
       const transformedBody = this.transformRequest(model, body, stream, credentials);
       const headers = this.buildHeaders(credentials, stream, url, model, transformedBody);
       // User per-provider override wins over registry headers (blocked names filtered at the API)
-      if (providerOverrides?.headers) Object.assign(headers, providerOverrides.headers);
+      for (const [name, value] of Object.entries(providerOverrides?.headers || {})) {
+        // Header names are case-insensitive; avoid sending two differently-cased values.
+        for (const existing of Object.keys(headers)) {
+          if (existing.toLowerCase() === name.toLowerCase()) delete headers[existing];
+        }
+        headers[name] = value;
+      }
 
       if (!retryAttemptsByUrl[urlIndex]) retryAttemptsByUrl[urlIndex] = 0;
 

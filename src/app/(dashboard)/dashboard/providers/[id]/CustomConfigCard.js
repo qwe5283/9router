@@ -9,13 +9,14 @@ import { useNotificationStore } from "@/store/notificationStore";
 const BLOCKED_HEADERS = ["host", "content-length", "content-type", "connection", "transfer-encoding", "authorization", "cookie"];
 const HEADER_NAME_RE = /^[A-Za-z0-9-]+$/;
 
-export default function CustomConfigCard({ providerId }) {
+export default function CustomConfigCard({ providerId, alwaysVisible = false }) {
   const notify = useNotificationStore();
   const [expanded, setExpanded] = useState(false);
   const [rows, setRows] = useState([{ name: "", value: "" }]);
   const [builtin, setBuiltin] = useState({});
   const [hasOverride, setHasOverride] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,6 +31,7 @@ export default function CustomConfigCard({ providerId }) {
         setBuiltin(builtinHeaders);
         setRows(headerRows.length ? headerRows : [{ name: "", value: "" }]);
         setHasOverride(Object.keys(data.headers || {}).length > 0);
+        setLoaded(true);
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -74,6 +76,8 @@ export default function CustomConfigCard({ providerId }) {
       }
       setHasOverride(Object.keys(headers).length > 0);
       notify.success("Custom headers saved");
+    } catch {
+      notify.error("Failed to save custom headers");
     } finally {
       setSaving(false);
     }
@@ -84,7 +88,7 @@ export default function CustomConfigCard({ providerId }) {
   };
 
   // Only render when there is something to customize: registry headers or existing overrides
-  if (Object.keys(builtin).length === 0 && !hasOverride) return null;
+  if (!alwaysVisible && Object.keys(builtin).length === 0 && !hasOverride) return null;
 
   return (
     <Card padding="xs">
@@ -154,7 +158,7 @@ export default function CustomConfigCard({ providerId }) {
             <div className="flex gap-2">
               <button
                 type="button"
-                disabled={saving}
+                disabled={saving || !loaded}
                 onClick={resetToBuiltin}
                 className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-black/[0.03] dark:hover:bg-white/[0.03] disabled:opacity-50"
               >
@@ -162,7 +166,7 @@ export default function CustomConfigCard({ providerId }) {
               </button>
               <button
                 type="button"
-                disabled={saving}
+                disabled={saving || !loaded}
                 onClick={save}
                 className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
               >
@@ -178,4 +182,5 @@ export default function CustomConfigCard({ providerId }) {
 
 CustomConfigCard.propTypes = {
   providerId: PropTypes.string.isRequired,
+  alwaysVisible: PropTypes.bool,
 };
