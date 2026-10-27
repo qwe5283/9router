@@ -23,6 +23,27 @@ sed -i "s|^MACHINE_ID_SALT=.*|MACHINE_ID_SALT=$(openssl rand -hex 32)|" .env
 docker compose up -d --build
 ```
 
+**中国大陆地区网络受限时：**
+
+如果 GitHub 克隆失败，将克隆命令替换为以下命令，然后进入目录并执行相同的 `.env` 配置步骤：
+
+```bash
+git clone https://gh-proxy.org/https://github.com/qwe5283/9router.git
+cd 9router
+```
+
+生成 `.env` 后，将 `docker compose up -d --build` 替换为以下命令，使用阿里云 APK 镜像和 npmmirror 构建，无需修改 Compose 文件：
+
+```bash
+docker build \
+  --build-arg ALPINE_MIRROR=mirrors.aliyun.com \
+  --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
+  -t 9router:local .
+docker compose up -d --no-build
+```
+
+以上换源仅影响 APK 和 npm；如果 Docker Hub 或 GHCR 镜像拉取失败，还需在 Docker 中配置可信的镜像加速器或网络代理。更新代码后，中国大陆地区同样使用以上 `docker build` 和 `docker compose up -d --no-build` 命令重新构建并启动。
+
 请妥善保管 `.env`，不要提交或泄露其中的密码和密钥。Compose 会从当前源码构建镜像，并同时启动 Headroom；数据保存在 `9router-data` Docker volume 中。
 
 - **`JWT_SECRET`**：用于签名和验证 Dashboard 登录会话的 JWT 密钥，防止他人伪造登录状态。
