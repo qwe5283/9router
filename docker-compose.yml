@@ -1,6 +1,10 @@
 services:
   9router:
-    image: decolua/9router:latest
+    image: 9router:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    pull_policy: build
     container_name: 9router
     restart: always
     ports:

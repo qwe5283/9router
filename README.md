@@ -7,32 +7,30 @@
 
 ## 快速开始
 
-准备 Docker、Docker Compose 和 Git，然后克隆并启动：
+准备 Docker、Docker Compose、Git、`sed` 和 OpenSSL，然后在 Linux 或 WSL 终端中克隆并启动：
 
 ```bash
 git clone https://github.com/qwe5283/9router.git
 cd 9router
 cp .env.example .env
+
+# 生成随机初始密码和密钥，并写入 .env
+sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -hex 32)|" .env
+sed -i "s|^INITIAL_PASSWORD=.*|INITIAL_PASSWORD=$(openssl rand -hex 16)|" .env
+sed -i "s|^API_KEY_SECRET=.*|API_KEY_SECRET=$(openssl rand -hex 32)|" .env
+sed -i "s|^MACHINE_ID_SALT=.*|MACHINE_ID_SALT=$(openssl rand -hex 32)|" .env
+
 docker compose up -d --build
 ```
 
-Windows PowerShell 用户请将 `cp .env.example .env` 替换为：
-
-```powershell
-Copy-Item .env.example .env
-```
-
-首次启动前请修改 `.env` 中的 `JWT_SECRET`、`INITIAL_PASSWORD`、`API_KEY_SECRET` 和 `MACHINE_ID_SALT`，不要沿用示例值。
+请妥善保管 `.env`，不要提交或泄露其中的密码和密钥。Compose 会从当前源码构建镜像，并同时启动 Headroom；数据保存在 `9router-data` Docker volume 中。
 
 - **`JWT_SECRET`**：用于签名和验证 Dashboard 登录会话的 JWT 密钥，防止他人伪造登录状态。
-- **`INITIAL_PASSWORD`**：尚未单独设置 Dashboard 密码时使用的初始登录密码，应在部署时设置为强密码。
+- **`INITIAL_PASSWORD`**：尚未单独设置 Dashboard 密码时使用的初始登录密码，启动后可通过该值登录 Dashboard。
 - **`API_KEY_SECRET`**：用于生成和校验 9Router API Key 的 HMAC 密钥，不是上游 AI 服务商的 API Key。
 - **`MACHINE_ID_SALT`**：对机器 ID 进行哈希时使用的盐值，用于生成实例标识并避免直接暴露原始机器 ID。
 
-仓库中的 `docker-compose.override.yml` 会自动生效：从当前源码构建镜像，并同时启动 Headroom。应用端口仅绑定到本机，数据保存在 `9router-dev-data` Docker volume 中。
-
 启动后可访问：
-
 - Dashboard：http://localhost:20128/dashboard
 - OpenAI 兼容 API：http://localhost:20128/v1
 - Headroom：http://localhost:8787
