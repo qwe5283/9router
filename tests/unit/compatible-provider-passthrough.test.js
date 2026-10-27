@@ -98,6 +98,44 @@ describe("manual provider request passthrough", () => {
     expect(result.response.headers.get("retry-after")).toBe("30");
   });
 
+  it.each([401, 403, 429, 502, 503])("returns the exact HTTP %s error body with fallback disabled", async (status) => {
+    const originalError = '{ "error": { "message": "upstream error", "type": "vendor_error", "code": "vendor_code", "details": [1, 2] } }\n';
+    fetchMock.mockImplementationOnce(async () => new Response(originalError, { status, headers: { "content-type": "application/json", "retry-after": "37" } }));
+    const opts = options("openai-compatible-chat-test");
+    opts.providerOverrides.fallbackEnabled = false;
+    const onRequestSuccess = vi.fn();
+    const result = await handleChatCore({ ...opts, onRequestSuccess });
+    expect(result.response.status).toBe(status);
+    expect(result.response.headers.get("retry-after")).toBe("37");
+    expect(await result.response.text()).toBe(originalError);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(onRequestSuccess).not.toHaveBeenCalled();
+  });
+
+  it("keeps a non-JSON error body instead of sanitizing or replacing it", async () => {
+    const originalError = '<html><title>Provider unavailable</title><body>vendor diagnostic detail</body></html>';
+    fetchMock.mockImplementationOnce(async () => new Response(originalError, { status: 502, headers: { "content-type": "text/html" } }));
+    const opts = options("anthropic-compatible-test");
+    opts.providerOverrides.fallbackEnabled = false;
+    const result = await handleChatCore(opts);
+    expect(result.response.status).toBe(502);
+    expect(result.response.headers.get("content-type")).toBe("text/html");
+    expect(await result.response.text()).toBe(originalError);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it.each([false, true])("preserves late SSE errors with fallback off and request passthrough=%s", async (passthrough) => {
+    const raw = 'data: {"choices":[{"delta":{"content":"partial answer"}}]}\n\nevent: error\ndata: {"error":{"type":"policy_error","message":"blocked by upstream"}}\n\ndata: Too many requests\n\n';
+    fetchMock.mockImplementationOnce(async () => new Response(raw, { headers: { "content-type": "text/event-stream" } }));
+    const opts = options("openai-compatible-chat-test", { model: "gateway/test-model", stream: true, messages: [{ role: "user", content: "hello" }] }, passthrough);
+    Object.assign(opts, { headroomEnabled: false, rtkEnabled: false, cavemanEnabled: false, ponytailEnabled: false, customPromptEnabled: false, pxpipeEnabled: false });
+    opts.credentials.providerSpecificData.apiType = "chat";
+    opts.providerOverrides.fallbackEnabled = false;
+    const result = await handleChatCore(opts);
+    expect(await result.response.text()).toBe(raw);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it("keeps normal translation and executor transforms when passthrough is off", async () => {
     const provider = "openai-compatible-chat-test";
     const opts = options(provider, original, false);

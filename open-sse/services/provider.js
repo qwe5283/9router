@@ -23,6 +23,10 @@ export function isCompatibleProvider(provider) {
   return isOpenAICompatible(provider) || isAnthropicCompatible(provider);
 }
 
+export function isProviderFallbackEnabled(provider, overrides) {
+  return !isCompatibleProvider(provider) || overrides?.fallbackEnabled !== false;
+}
+
 // Resolve the API type (chat vs responses) for an openai-compatible node.
 // The stored apiType on the connection's providerSpecificData (kept in sync with
 // the node on create/update) is authoritative. Falls back to the node ID

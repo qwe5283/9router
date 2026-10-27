@@ -23,6 +23,31 @@ const creds = { apiKey: "k" };
 
 beforeEach(() => fetchMock.mockReset());
 
+describe("compatible provider with fallback disabled", () => {
+  const args = {
+    model: "m", body: {}, stream: false, credentials: creds,
+    providerOverrides: { fallbackEnabled: false },
+  };
+
+  it.each([429, 502, 503, 504])("returns the first HTTP %s without retrying or using a fallback URL", async (status) => {
+    const executor = new BaseExecutor("openai-compatible-chat-test", {
+      baseUrls: ["https://a/api", "https://b/api"], retry: { [status]: { attempts: 3, delayMs: 0 } },
+    });
+    fetchMock.mockResolvedValue(res(status));
+    expect((await executor.execute(args)).response.status).toBe(status);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("does not retry a network failure", async () => {
+    const executor = new BaseExecutor("openai-compatible-chat-test", {
+      baseUrl: "https://a/api", retry: { 502: { attempts: 3, delayMs: 0 } },
+    });
+    fetchMock.mockRejectedValueOnce(new Error("connection reset"));
+    await expect(executor.execute(args)).rejects.toThrow("connection reset");
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
 describe("BaseExecutor.execute — retry by status (config-driven)", () => {
   it("retries 502 `attempts` times then succeeds", async () => {
     const ex = makeExec({ baseUrl: "https://x/api", retry: { 502: { attempts: 3, delayMs: 0 } } });

@@ -8,6 +8,7 @@ import { getCapabilitiesForModel } from "../providers/capabilities.js";
 import { parseModel } from "./model.js";
 import { extractTextContent } from "../translator/formats/gemini.js";
 import { peekStreamForContent, reconstructStream, isNoRetryFinish } from "./emptyFailover.js";
+import { isResponseFallbackDisabled } from "../utils/responsePolicy.js";
 import {
   getStickyComboModel,
   setStickyComboModel,
@@ -474,6 +475,8 @@ export async function handleComboChat({
 
     try {
       const result = await handleSingleModel(body, modelStr);
+
+      if (isResponseFallbackDisabled(result)) return result;
       
       // Success (2xx). A 2xx is necessary but NOT sufficient: Gemini aborts (e.g.
       // MALFORMED_FUNCTION_CALL) still return 200 and stream empty content, which would

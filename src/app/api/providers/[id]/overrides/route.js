@@ -24,15 +24,21 @@ const BLOCKED_HEADERS = new Set([
 
 /**
  * Validate + normalize an override payload. Returns { override } or { error }.
- * Update supplied fields independently so headers and passthrough can be saved separately.
+ * Update supplied fields independently so headers and routing toggles do not overwrite each other.
  */
-function normalizeOverride({ headers, passthrough }, current) {
+function normalizeOverride({ headers, passthrough, fallbackEnabled }, current) {
   const out = { ...current };
 
   if (passthrough !== undefined) {
     if (typeof passthrough !== "boolean") return { error: "passthrough must be a boolean" };
     if (passthrough) out.passthrough = true;
     else delete out.passthrough;
+  }
+
+  if (fallbackEnabled !== undefined) {
+    if (typeof fallbackEnabled !== "boolean") return { error: "fallbackEnabled must be a boolean" };
+    if (fallbackEnabled) delete out.fallbackEnabled;
+    else out.fallbackEnabled = false;
   }
 
   if (headers !== undefined && headers !== null) {
@@ -86,6 +92,7 @@ export async function GET(request, { params }) {
       headers: override.headers || {},
       builtinHeaders: PROVIDERS[canonical]?.headers || {},
       passthrough: override.passthrough === true,
+      fallbackEnabled: override.fallbackEnabled !== false,
     });
   } catch (error) {
     console.log("Error getting provider overrides:", error);
@@ -94,7 +101,7 @@ export async function GET(request, { params }) {
 }
 
 /**
- * PUT /api/providers/[id]/overrides — body: { headers?: {name: value}, passthrough?: boolean }
+ * PUT /api/providers/[id]/overrides — body: { headers?, passthrough?, fallbackEnabled? }
  * Empty payload clears the override.
  */
 export async function PUT(request, { params }) {
@@ -108,6 +115,9 @@ export async function PUT(request, { params }) {
     if (body.passthrough !== undefined && !isCompatibleProvider(canonical)) {
       return NextResponse.json({ error: "Passthrough is only supported for compatible providers" }, { status: 400 });
     }
+    if (body.fallbackEnabled !== undefined && !isCompatibleProvider(canonical)) {
+      return NextResponse.json({ error: "Fallback can only be configured for compatible providers" }, { status: 400 });
+    }
     const current = await readOverrides();
     const { override, error } = normalizeOverride(body, Object.keys(body).length ? current[canonical] : {});
     if (error) {
@@ -117,7 +127,11 @@ export async function PUT(request, { params }) {
     if (override) next[canonical] = override;
     else delete next[canonical];
     await updateSettings({ providerOverrides: next });
-    return NextResponse.json({ headers: override?.headers || {}, passthrough: override?.passthrough === true });
+    return NextResponse.json({
+      headers: override?.headers || {},
+      passthrough: override?.passthrough === true,
+      fallbackEnabled: override?.fallbackEnabled !== false,
+    });
   } catch (error) {
     console.log("Error saving provider overrides:", error);
     return NextResponse.json({ error: "Failed to save overrides" }, { status: 500 });

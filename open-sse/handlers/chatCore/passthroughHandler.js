@@ -9,7 +9,8 @@ import { HTTP_STATUS } from "../../config/runtimeConfig.js";
 
 // Observe usage without parsing/re-serializing the bytes sent back to the client.
 export async function handlePassthroughResponse({ providerResponse, provider, model, body, stream, finalBody, requestStartTime, connectionId, apiKey, clientRawRequest, onRequestSuccess, streamController, trackDone, appendLog, reqTag, log }) {
-  if (onRequestSuccess) Promise.resolve().then(onRequestSuccess).catch(() => {});
+  const success = providerResponse.ok;
+  if (success && onRequestSuccess) Promise.resolve().then(onRequestSuccess).catch(() => {});
   const contentType = providerResponse.headers.get("content-type") || "application/json";
   const isSSE = contentType.toLowerCase().includes("text/event-stream");
   const headers = {
@@ -21,7 +22,7 @@ export async function handlePassthroughResponse({ providerResponse, provider, mo
   const complete = (usage, responseBody, ttftAt) => {
     const latency = { ttft: ttftAt ? ttftAt - requestStartTime : Date.now() - requestStartTime, total: Date.now() - requestStartTime };
     trackDone();
-    appendLog({ status: "SUCCESS" });
+    appendLog({ status: success ? "SUCCESS" : `FAILED ${providerResponse.status}` });
     saveUsageStats({ provider, model, tokens: usage, connectionId, apiKey, endpoint: clientRawRequest?.endpoint, silent: true });
     saveRequestDetail(buildRequestDetail({
       provider, model, connectionId, latency,
@@ -30,7 +31,7 @@ export async function handlePassthroughResponse({ providerResponse, provider, mo
       providerRequest: finalBody,
       providerResponse: responseBody,
       response: { type: isSSE ? "streaming" : "passthrough" },
-      status: "success",
+      status: success ? "success" : "error",
     }, { endpoint: clientRawRequest?.endpoint || null })).catch(() => {});
     if (log?.line) log.line(reqTag, "📊", formatDoneLine({ usage, latency }));
   };
@@ -42,7 +43,7 @@ export async function handlePassthroughResponse({ providerResponse, provider, mo
       let responseBody = null;
       try { responseBody = JSON.parse(new TextDecoder().decode(bytes)); } catch { /* non-JSON bodies remain unchanged */ }
       complete(extractUsageFromResponse(responseBody), responseBody, null);
-      return { success: true, response: new Response(hasBody ? bytes : null, { status: providerResponse.status, headers }) };
+      return { success, status: providerResponse.status, response: new Response(hasBody ? bytes : null, { status: providerResponse.status, statusText: providerResponse.statusText, headers }) };
     } catch (error) {
       trackDone();
       appendLog({ status: `FAILED ${HTTP_STATUS.BAD_GATEWAY}` });
@@ -77,7 +78,8 @@ export async function handlePassthroughResponse({ providerResponse, provider, mo
     },
   });
   return {
-    success: true,
-    response: new Response(pipeWithDisconnect(providerResponse, observer, streamController), { status: providerResponse.status, headers }),
+    success,
+    status: providerResponse.status,
+    response: new Response(pipeWithDisconnect(providerResponse, observer, streamController), { status: providerResponse.status, statusText: providerResponse.statusText, headers }),
   };
 }

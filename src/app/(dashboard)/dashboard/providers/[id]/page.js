@@ -74,6 +74,8 @@ export default function ProviderDetailPage() {
   const [providerStrategy, setProviderStrategy] = useState(null);
   const [passthroughEnabled, setPassthroughEnabled] = useState(false);
   const [savingPassthrough, setSavingPassthrough] = useState(false);
+  const [fallbackEnabled, setFallbackEnabled] = useState(true);
+  const [savingFallback, setSavingFallback] = useState(false);
   const [providerStickyLimit, setProviderStickyLimit] = useState("");
   const [thinkingMode, setThinkingMode] = useState("auto");
   const [autoPing, setAutoPing] = useState({ enabled: false, connections: {}, schedules: {} });
@@ -333,6 +335,7 @@ export default function ProviderDetailPage() {
       const override = (settingsData.providerStrategies || {})[providerId] || {};
       setProviderStrategy(override.fallbackStrategy || null);
       setPassthroughEnabled(settingsData.providerOverrides?.[providerId]?.passthrough === true);
+      setFallbackEnabled(settingsData.providerOverrides?.[providerId]?.fallbackEnabled !== false);
       setProviderStickyLimit(override.stickyRoundRobinLimit != null ? String(override.stickyRoundRobinLimit) : "1");
       // Load per-provider thinking config
       const thinkingCfg = (settingsData.providerThinking || {})[providerId] || {};
@@ -421,23 +424,31 @@ export default function ProviderDetailPage() {
     saveProviderStrategy(strategy, sticky);
   };
 
-  const handlePassthroughToggle = async (enabled) => {
-    setSavingPassthrough(true);
+  const saveProviderToggle = async (field, enabled, setValue, setSaving, errorMessage) => {
+    setSaving(true);
     try {
       const res = await fetch(`/api/providers/${providerId}/overrides`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ passthrough: enabled }),
+        body: JSON.stringify({ [field]: enabled }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to save passthrough setting");
-      setPassthroughEnabled(data.passthrough === true);
+      if (!res.ok) throw new Error(data.error || errorMessage);
+      setValue(data[field] === true);
     } catch (error) {
-      notify.error(error.message || "Failed to save passthrough setting");
+      notify.error(error.message || errorMessage);
     } finally {
-      setSavingPassthrough(false);
+      setSaving(false);
     }
   };
+
+  const handlePassthroughToggle = (enabled) => saveProviderToggle(
+    "passthrough", enabled, setPassthroughEnabled, setSavingPassthrough, "Failed to save passthrough setting"
+  );
+
+  const handleFallbackToggle = (enabled) => saveProviderToggle(
+    "fallbackEnabled", enabled, setFallbackEnabled, setSavingFallback, "Failed to save fallback setting"
+  );
 
   const handleStickyLimitChange = (value) => {
     setProviderStickyLimit(value);
@@ -1623,6 +1634,17 @@ export default function ProviderDetailPage() {
                     checked={passthroughEnabled}
                     onChange={handlePassthroughToggle}
                     disabled={savingPassthrough}
+                  />
+                </div>
+              )}
+              {isCompatible && (
+                <div className="flex items-center gap-2" title="默认开启。关闭后仅请求当前密钥，不重试或回退，并原样返回上游响应（包括 HTTP 和 SSE 错误）；Combo 也不会切换到其他模型。">
+                  <span className="text-xs text-text-muted font-medium">回退</span>
+                  <Toggle
+                    ariaLabel="回退"
+                    checked={fallbackEnabled}
+                    onChange={handleFallbackToggle}
+                    disabled={savingFallback}
                   />
                 </div>
               )}

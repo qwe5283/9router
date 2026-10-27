@@ -34,7 +34,7 @@ describe("compatible provider overrides", () => {
 
   it("supports Anthropic-compatible nodes as well", async () => {
     const response = await put({ passthrough: true, headers: { "X-Gateway": "test" } }, { params: Promise.resolve({ id: "anthropic-compatible-test" }) });
-    expect(await response.json()).toEqual({ passthrough: true, headers: { "X-Gateway": "test" } });
+    expect(await response.json()).toEqual({ passthrough: true, fallbackEnabled: true, headers: { "X-Gateway": "test" } });
   });
 
   it.each(["true", 1, null])("rejects a non-boolean passthrough value %j", async (passthrough) => {
@@ -51,5 +51,27 @@ describe("compatible provider overrides", () => {
     expect((await put({ headers: { Authorization: "replaced" } })).status).toBe(400);
     expect((await put({ headers: { "X-Custom": "bad\r\nvalue" } })).status).toBe(400);
     expect(state.settings.providerOverrides[provider]).toEqual({ passthrough: true });
+  });
+
+  it("enables fallback by default and saves it without overwriting headers or passthrough", async () => {
+    expect(await (await GET(null, params)).json()).toMatchObject({ fallbackEnabled: true });
+    await put({ headers: { "X-Custom": "kept" }, passthrough: true });
+    expect(await (await put({ fallbackEnabled: false })).json()).toEqual({
+      headers: { "X-Custom": "kept" }, passthrough: true, fallbackEnabled: false,
+    });
+    await put({ headers: { "X-Custom": "updated" } });
+    await put({ passthrough: false });
+    expect(await (await GET(null, params)).json()).toMatchObject({ headers: { "X-Custom": "updated" }, passthrough: false, fallbackEnabled: false });
+    await put({ fallbackEnabled: true });
+    expect(state.settings.providerOverrides[provider]).toEqual({ headers: { "X-Custom": "updated" } });
+  });
+
+  it.each(["false", 0, null])("rejects non-boolean fallbackEnabled %j", async (fallbackEnabled) => {
+    expect((await put({ fallbackEnabled })).status).toBe(400);
+    expect(state.settings.providerOverrides).toEqual({});
+  });
+
+  it("does not disable fallback for built-in providers", async () => {
+    expect((await put({ fallbackEnabled: false }, { params: Promise.resolve({ id: "codex" }) })).status).toBe(400);
   });
 });

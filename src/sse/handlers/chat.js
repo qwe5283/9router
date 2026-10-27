@@ -28,7 +28,8 @@ import { getProjectIdForConnection } from "open-sse/services/projectId.js";
 import { stripModelContextMarker } from "open-sse/utils/modelMarkers.js";
 import { getKeyAccessContext, enforceKeyAccess, filterAdapterModels } from "../services/keyAccess.js";
 import { resolveSmartChoice } from "../services/systemoneRouter.js";
-import { isCompatibleProvider } from "open-sse/services/provider.js";
+import { isCompatibleProvider, isProviderFallbackEnabled } from "open-sse/services/provider.js";
+import { disableResponseFallback } from "open-sse/utils/responsePolicy.js";
 
 /**
  * Handle chat completion request
@@ -105,8 +106,9 @@ export async function handleChat(request, clientRawRequest = null) {
   const bypassResponse = handleBypassRequest(body, modelStr, userAgent, !!settings.ccFilterNaming);
   if (bypassResponse) {
     const { provider } = await getModelInfo(modelStr);
-    const passthrough = isCompatibleProvider(provider) && settings.providerOverrides?.[provider]?.passthrough === true;
-    if (!passthrough) return bypassResponse.response || bypassResponse;
+    const overrides = settings.providerOverrides?.[provider];
+    const directResponse = isCompatibleProvider(provider) && (overrides?.passthrough === true || !isProviderFallbackEnabled(provider, overrides));
+    if (!directResponse) return bypassResponse.response || bypassResponse;
   }
 
   const requiredCapabilities = detectRequiredCapabilities(body);
@@ -270,6 +272,11 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
 
   const { provider, model } = modelInfo;
 
+  const chatSettings = await getSettings();
+  const providerOverrides = chatSettings.providerOverrides?.[provider] || null;
+  const fallbackEnabled = isProviderFallbackEnabled(provider, providerOverrides);
+  const finish = (response) => fallbackEnabled ? response : disableResponseFallback(response);
+
   // Routing shown in the unified "▶" line (client model → provider/model)
 
   // Extract userAgent from request
@@ -290,14 +297,14 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         const errorMsg = lastError || credentials.lastError || "Unavailable";
         const status = HTTP_STATUS.SERVICE_UNAVAILABLE;
         log.warn("CHAT", `[${provider}/${model}] ${errorMsg} (${credentials.retryAfterHuman})`);
-        return unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman, lastHeaders);
+        return finish(unavailableResponse(status, `[${provider}/${model}] ${errorMsg}`, credentials.retryAfter, credentials.retryAfterHuman, lastHeaders));
       }
       if (excludeConnectionIds.size === 0) {
         log.warn("AUTH", `No active credentials for provider: ${provider}`);
-        return errorResponse(HTTP_STATUS.NOT_FOUND, `No active credentials for provider: ${provider}`);
+        return finish(errorResponse(HTTP_STATUS.NOT_FOUND, `No active credentials for provider: ${provider}`));
       }
       log.warn("CHAT", "No more accounts available", { provider });
-      return errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable", lastHeaders);
+      return finish(errorResponse(lastStatus || HTTP_STATUS.SERVICE_UNAVAILABLE, lastError || "All accounts unavailable", lastHeaders));
     }
 
     // Account selection shown in the unified "▶" line (acc:...)
@@ -314,7 +321,6 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     }
 
     // Use shared chatCore
-    const chatSettings = await getSettings();
     const providerThinking = (chatSettings.providerThinking || {})[provider] || null;
     const result = await handleChatCore({
       body: { ...body, model: `${provider}/${model}` },
@@ -345,7 +351,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       onPxpipeEvent: appendPxpipeEvent,
       providerThinking,
       // Per-provider user overrides (custom headers / connect timeout) from settings
-      providerOverrides: (chatSettings.providerOverrides || {})[provider] || null,
+      providerOverrides,
       // Detect source format by endpoint + body
       sourceFormatOverride: request?.url ? detectFormatByEndpoint(new URL(request.url).pathname, body) : null,
       onCredentialsRefreshed: async (newCreds) => {
@@ -362,7 +368,7 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       }
     });
 
-    if (result.success) return result.response;
+    if (!fallbackEnabled || result.success) return finish(result.response);
 
     // Antigravity 409/429: refresh live quota to get exact resetAt before locking
     let quotaResetMs = null;
