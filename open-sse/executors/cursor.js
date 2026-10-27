@@ -446,7 +446,7 @@ export class CursorExecutor extends BaseExecutor {
       throw new Error("Machine ID is required for Cursor API");
     }
 
-    return buildCursorHeaders(accessToken, machineId, ghostMode);
+    return this.applyHeaderOverrides(buildCursorHeaders(accessToken, machineId, ghostMode), credentials);
   }
 
   transformRequest(model, body, stream, credentials) {

@@ -79,6 +79,16 @@ describe("manual provider request passthrough", () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ ...raw, model: "test-model" });
   });
 
+  it("passes the original HTTP User-Agent through the chat handler when enabled", async () => {
+    const opts = options("openai-compatible-chat-test");
+    opts.clientRawRequest.headers["user-agent"] = "original-http-client/7.0";
+    opts.providerOverrides.headers["User-Agent"] = "configured-agent/1.0";
+    opts.providerOverrides.useClientUserAgent = true;
+    const result = await handleChatCore(opts);
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get("user-agent")).toBe("original-http-client/7.0");
+    await result.response.text();
+  });
+
   it("passes SSE bytes and extension events through unchanged", async () => {
     const event = 'event: vendor.custom\ndata: {"extension":"你好"}\n\ndata: {"usage":{"prompt_tokens":9,"completion_tokens":3}}\n\ndata: [DONE]\n\n';
     const bytes = new TextEncoder().encode(event);

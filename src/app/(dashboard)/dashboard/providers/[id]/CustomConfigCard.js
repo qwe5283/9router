@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import PropTypes from "prop-types";
-import { Card, Badge } from "@/shared/components";
+import { Card, Badge, Toggle } from "@/shared/components";
 import { useNotificationStore } from "@/store/notificationStore";
 
 // Mirrors the server-side gate in /api/providers/[id]/overrides — client check is UX only
@@ -17,6 +17,7 @@ export default function CustomConfigCard({ providerId, alwaysVisible = false }) 
   const [hasOverride, setHasOverride] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [useClientUserAgent, setUseClientUserAgent] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -30,7 +31,8 @@ export default function CustomConfigCard({ providerId, alwaysVisible = false }) 
         const headerRows = Object.entries(effective).map(([name, value]) => ({ name, value }));
         setBuiltin(builtinHeaders);
         setRows(headerRows.length ? headerRows : [{ name: "", value: "" }]);
-        setHasOverride(Object.keys(data.headers || {}).length > 0);
+        setUseClientUserAgent(data.useClientUserAgent === true);
+        setHasOverride(Object.keys(data.headers || {}).length > 0 || data.useClientUserAgent === true);
         setLoaded(true);
       })
       .catch(() => {});
@@ -51,7 +53,7 @@ export default function CustomConfigCard({ providerId, alwaysVisible = false }) 
         notify.error(`Invalid header name: ${name}`);
         return;
       }
-      if (BLOCKED_HEADERS.includes(name.toLowerCase())) {
+      if (BLOCKED_HEADERS.includes(name.toLowerCase()) && r.value !== builtin[name]) {
         notify.error(`Header ${name} cannot be overridden`);
         return;
       }
@@ -67,24 +69,25 @@ export default function CustomConfigCard({ providerId, alwaysVisible = false }) 
       const res = await fetch(`/api/providers/${providerId}/overrides`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ headers }),
+        body: JSON.stringify({ headers, useClientUserAgent }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         notify.error(err.error || "Failed to save");
         return;
       }
-      setHasOverride(Object.keys(headers).length > 0);
+      setHasOverride(Object.keys(headers).length > 0 || useClientUserAgent);
       notify.success("Custom headers saved");
     } catch {
       notify.error("Failed to save custom headers");
     } finally {
       setSaving(false);
     }
-  }, [rows, builtin, providerId, notify]);
+  }, [rows, builtin, providerId, notify, useClientUserAgent]);
 
   const resetToBuiltin = () => {
     setRows(Object.entries(builtin).map(([name, value]) => ({ name, value })));
+    setUseClientUserAgent(false);
   };
 
   // Only render when there is something to customize: registry headers or existing overrides
@@ -146,7 +149,7 @@ export default function CustomConfigCard({ providerId, alwaysVisible = false }) 
             })}
           </div>
 
-          <div className="mt-3 flex items-center justify-between gap-2">
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
             <button
               type="button"
               onClick={() => setRows((prev) => [...prev, { name: "", value: "" }])}
@@ -155,7 +158,17 @@ export default function CustomConfigCard({ providerId, alwaysVisible = false }) 
               <span className="material-symbols-outlined text-[16px]">add</span>
               Add header
             </button>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              <div className="flex items-center gap-2" title="保存后生效。优先使用原始客户端 User-Agent；客户端未提供时，沿用表单或默认配置。">
+                <span className="text-xs text-text-muted">使用客户端User-Agent</span>
+                <Toggle
+                  ariaLabel="使用客户端User-Agent"
+                  size="sm"
+                  checked={useClientUserAgent}
+                  onChange={setUseClientUserAgent}
+                  disabled={saving || !loaded}
+                />
+              </div>
               <button
                 type="button"
                 disabled={saving || !loaded}

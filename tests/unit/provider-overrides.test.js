@@ -34,7 +34,7 @@ describe("compatible provider overrides", () => {
 
   it("supports Anthropic-compatible nodes as well", async () => {
     const response = await put({ passthrough: true, headers: { "X-Gateway": "test" } }, { params: Promise.resolve({ id: "anthropic-compatible-test" }) });
-    expect(await response.json()).toEqual({ passthrough: true, fallbackEnabled: true, headers: { "X-Gateway": "test" } });
+    expect(await response.json()).toEqual({ passthrough: true, fallbackEnabled: true, useClientUserAgent: false, headers: { "X-Gateway": "test" } });
   });
 
   it.each(["true", 1, null])("rejects a non-boolean passthrough value %j", async (passthrough) => {
@@ -57,7 +57,7 @@ describe("compatible provider overrides", () => {
     expect(await (await GET(null, params)).json()).toMatchObject({ fallbackEnabled: true });
     await put({ headers: { "X-Custom": "kept" }, passthrough: true });
     expect(await (await put({ fallbackEnabled: false })).json()).toEqual({
-      headers: { "X-Custom": "kept" }, passthrough: true, fallbackEnabled: false,
+      headers: { "X-Custom": "kept" }, passthrough: true, fallbackEnabled: false, useClientUserAgent: false,
     });
     await put({ headers: { "X-Custom": "updated" } });
     await put({ passthrough: false });
@@ -73,5 +73,28 @@ describe("compatible provider overrides", () => {
 
   it("does not disable fallback for built-in providers", async () => {
     expect((await put({ fallbackEnabled: false }, { params: Promise.resolve({ id: "codex" }) })).status).toBe(400);
+  });
+
+  it("disables client User-Agent reuse by default and preserves all other overrides", async () => {
+    expect(await (await GET(null, params)).json()).toMatchObject({ useClientUserAgent: false });
+    await put({ headers: { "User-Agent": "configured-agent" }, passthrough: true, fallbackEnabled: false });
+    expect(await (await put({ useClientUserAgent: true })).json()).toMatchObject({
+      headers: { "User-Agent": "configured-agent" }, passthrough: true, fallbackEnabled: false, useClientUserAgent: true,
+    });
+    await put({ headers: { "User-Agent": "updated-agent" } });
+    expect(await (await GET(null, params)).json()).toMatchObject({ useClientUserAgent: true });
+    await put({ useClientUserAgent: false });
+    expect(state.settings.providerOverrides[provider]).toEqual({ headers: { "User-Agent": "updated-agent" }, passthrough: true, fallbackEnabled: false });
+  });
+
+  it("supports client User-Agent reuse for built-in providers with Custom Headers", async () => {
+    const context = { params: Promise.resolve({ id: "codex" }) };
+    expect((await put({ useClientUserAgent: true }, context)).status).toBe(200);
+    expect(await (await GET(null, context)).json()).toMatchObject({ useClientUserAgent: true });
+  });
+
+  it.each(["true", 1, null])("rejects non-boolean useClientUserAgent %j", async (useClientUserAgent) => {
+    expect((await put({ useClientUserAgent })).status).toBe(400);
+    expect(state.settings.providerOverrides).toEqual({});
   });
 });

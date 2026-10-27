@@ -35,7 +35,7 @@ export class GithubExecutor extends BaseExecutor {
 
   buildHeaders(credentials, stream = true) {
     const token = credentials.copilotToken || credentials.accessToken;
-    return {
+    return this.applyHeaderOverrides({
       "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
       "copilot-integration-id": "vscode-chat",
@@ -50,7 +50,7 @@ export class GithubExecutor extends BaseExecutor {
       // Harmless no-op on /chat/completions and /responses; required by /v1/messages.
       "anthropic-version": ANTHROPIC_API_VERSION,
       "Accept": stream ? "text/event-stream" : "application/json"
-    };
+    }, credentials);
   }
 
   // Sanitize messages for GitHub Copilot /chat/completions endpoint (gpt/gemini/grok models —

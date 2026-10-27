@@ -5,6 +5,13 @@ import { dbg } from "../utils/debugLog.js";
 import { ANTHROPIC_API_VERSION, OPENAI_COMPAT_BASE, ANTHROPIC_COMPAT_BASE } from "../providers/shared.js";
 import { isCompatibleProvider, isProviderFallbackEnabled, resolveOpenAICompatibleApiType } from "../services/provider.js";
 
+function setHeaderOverride(headers, name, value) {
+  for (const existing of Object.keys(headers)) {
+    if (existing.toLowerCase() === name.toLowerCase()) delete headers[existing];
+  }
+  headers[name] = value;
+}
+
 /**
  * BaseExecutor - Base class for provider executors
  */
@@ -80,6 +87,17 @@ export class BaseExecutor {
     return body;
   }
 
+  applyHeaderOverrides(headers, credentials, providerOverrides = credentials?.providerOverrides) {
+    for (const [name, value] of Object.entries(providerOverrides?.headers || {})) {
+      setHeaderOverride(headers, name, value);
+    }
+    if (providerOverrides?.useClientUserAgent === true) {
+      const clientUserAgent = new Headers(credentials?.rawHeaders || {}).get("user-agent");
+      if (clientUserAgent) setHeaderOverride(headers, "User-Agent", clientUserAgent);
+    }
+    return headers;
+  }
+
   shouldRetry(status, urlIndex) {
     return status === HTTP_STATUS.RATE_LIMITED && urlIndex + 1 < this.getFallbackCount();
   }
@@ -133,13 +151,7 @@ export class BaseExecutor {
         : this.transformRequest(model, body, stream, credentials);
       const headers = this.buildHeaders(credentials, stream, url, model, transformedBody);
       // User per-provider override wins over registry headers (blocked names filtered at the API)
-      for (const [name, value] of Object.entries(providerOverrides?.headers || {})) {
-        // Header names are case-insensitive; avoid sending two differently-cased values.
-        for (const existing of Object.keys(headers)) {
-          if (existing.toLowerCase() === name.toLowerCase()) delete headers[existing];
-        }
-        headers[name] = value;
-      }
+      this.applyHeaderOverrides(headers, credentials, providerOverrides);
 
       if (!retryAttemptsByUrl[urlIndex]) retryAttemptsByUrl[urlIndex] = 0;
 

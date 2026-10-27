@@ -26,7 +26,7 @@ const BLOCKED_HEADERS = new Set([
  * Validate + normalize an override payload. Returns { override } or { error }.
  * Update supplied fields independently so headers and routing toggles do not overwrite each other.
  */
-function normalizeOverride({ headers, passthrough, fallbackEnabled }, current) {
+function normalizeOverride({ headers, passthrough, fallbackEnabled, useClientUserAgent }, current) {
   const out = { ...current };
 
   if (passthrough !== undefined) {
@@ -39,6 +39,12 @@ function normalizeOverride({ headers, passthrough, fallbackEnabled }, current) {
     if (typeof fallbackEnabled !== "boolean") return { error: "fallbackEnabled must be a boolean" };
     if (fallbackEnabled) delete out.fallbackEnabled;
     else out.fallbackEnabled = false;
+  }
+
+  if (useClientUserAgent !== undefined) {
+    if (typeof useClientUserAgent !== "boolean") return { error: "useClientUserAgent must be a boolean" };
+    if (useClientUserAgent) out.useClientUserAgent = true;
+    else delete out.useClientUserAgent;
   }
 
   if (headers !== undefined && headers !== null) {
@@ -93,6 +99,7 @@ export async function GET(request, { params }) {
       builtinHeaders: PROVIDERS[canonical]?.headers || {},
       passthrough: override.passthrough === true,
       fallbackEnabled: override.fallbackEnabled !== false,
+      useClientUserAgent: override.useClientUserAgent === true,
     });
   } catch (error) {
     console.log("Error getting provider overrides:", error);
@@ -101,7 +108,7 @@ export async function GET(request, { params }) {
 }
 
 /**
- * PUT /api/providers/[id]/overrides — body: { headers?, passthrough?, fallbackEnabled? }
+ * PUT /api/providers/[id]/overrides — body: { headers?, passthrough?, fallbackEnabled?, useClientUserAgent? }
  * Empty payload clears the override.
  */
 export async function PUT(request, { params }) {
@@ -131,6 +138,7 @@ export async function PUT(request, { params }) {
       headers: override?.headers || {},
       passthrough: override?.passthrough === true,
       fallbackEnabled: override?.fallbackEnabled !== false,
+      useClientUserAgent: override?.useClientUserAgent === true,
     });
   } catch (error) {
     console.log("Error saving provider overrides:", error);

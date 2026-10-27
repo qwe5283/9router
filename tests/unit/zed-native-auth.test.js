@@ -23,23 +23,35 @@ import {
 
 // Imports must be dynamic so DATA_DIR is set before the DB layer loads.
 const originalDataDir = process.env.DATA_DIR;
+let testDataDir;
 let startZedProxy, stopZedProxy, registerZedSession, getZedSessionStatus, clearZedSession;
 let generateAuthData, exchangeTokens;
 
 // Importing the OAuth + DB module graph after vi.resetModules() exceeds the 10s default
 // hook timeout under full-suite load (it passes in isolation), so allow 30s.
 beforeAll(async () => {
-  process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "9router-zed-auth-"));
+  testDataDir = fs.mkdtempSync(path.join(os.tmpdir(), "9router-zed-auth-"));
+  process.env.DATA_DIR = testDataDir;
   vi.resetModules();
   ({ startZedProxy, stopZedProxy, registerZedSession, getZedSessionStatus, clearZedSession } =
     await import("@/lib/oauth/utils/server.js"));
   ({ generateAuthData, exchangeTokens } = await import("@/lib/oauth/providers/index.js"));
 }, 30_000);
 
-afterAll(() => {
-  fs.rmSync(process.env.DATA_DIR, { recursive: true, force: true });
-  if (originalDataDir === undefined) delete process.env.DATA_DIR;
-  else process.env.DATA_DIR = originalDataDir;
+afterAll(async () => {
+  try {
+    // Windows cannot remove a database directory while SQLite still has it open.
+    const { getAdapter } = await import("@/lib/db/driver.js");
+    (await getAdapter()).close();
+    const resolved = path.resolve(testDataDir);
+    if (path.dirname(resolved) !== path.resolve(os.tmpdir()) || !path.basename(resolved).startsWith("9router-zed-auth-")) {
+      throw new Error("Refusing to remove a directory outside this test's temporary workspace");
+    }
+    fs.rmSync(resolved, { recursive: true, force: true });
+  } finally {
+    if (originalDataDir === undefined) delete process.env.DATA_DIR;
+    else process.env.DATA_DIR = originalDataDir;
+  }
 });
 
 const realFetch = globalThis.fetch;
