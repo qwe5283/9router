@@ -37,6 +37,9 @@ yarn-error.log*
 .env*
 !.env.example
 
+# local compose overrides (host-specific, not for the repo)
+docker-compose.override.yml
+
 # vercel
 .vercel
 
