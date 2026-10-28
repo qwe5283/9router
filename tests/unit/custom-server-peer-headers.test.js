@@ -1,6 +1,6 @@
 // custom-server.js is the only thing that makes x-9r-real-ip trustworthy. Boot a real
 // HTTP server through it and confirm a client cannot smuggle its own peer headers in.
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import { createRequire } from "node:module";
 import http from "node:http";
 import { __test__ as requestDetails } from "@/lib/db/repos/requestDetailsRepo.js";
@@ -25,8 +25,32 @@ afterAll(async () => {
   await new Promise((resolve) => server.close(resolve));
 });
 
-async function get(headers = {}) {
-  await fetch(baseUrl, { headers });
+afterEach(() => {
+  delete process.env.TRUSTED_PROXY_IPS;
+});
+
+async function get(headers = {}, socketIp) {
+  if (!socketIp) {
+    await fetch(baseUrl, { headers });
+    return seenHeaders;
+  }
+
+  // Exercise the real HTTP wrapper with the peer address Docker would expose.
+  const emit = server.emit;
+  server.emit = function (event, req, ...args) {
+    if (event !== "request") return emit.call(this, event, req, ...args);
+    Object.defineProperty(req.socket, "remoteAddress", { value: socketIp, configurable: true });
+    try {
+      return emit.call(this, event, req, ...args);
+    } finally {
+      delete req.socket.remoteAddress;
+    }
+  };
+  try {
+    await fetch(baseUrl, { headers });
+  } finally {
+    server.emit = emit;
+  }
   return seenHeaders;
 }
 
@@ -66,6 +90,31 @@ describe("custom-server peer header sanitizing", () => {
     expect(headers["x-9r-via-proxy"]).toBe("1");
     expect(headers["x-9r-real-ip"]).toBe("203.0.113.9");
     expect(headers["x-forwarded-for"]).toBeUndefined();
+  });
+
+  it("adopts a valid forwarded IP from an explicitly trusted Docker proxy", async () => {
+    process.env.TRUSTED_PROXY_IPS = "127.0.0.1, 172.20.0.1";
+
+    const headers = await get({ "x-real-ip": "203.0.113.9" }, "172.20.0.1");
+
+    expect(headers["x-9r-real-ip"]).toBe("203.0.113.9");
+    expect(headers["x-forwarded-for"]).toBeUndefined();
+  });
+
+  it("keeps the socket IP when the forwarding peer is not trusted", async () => {
+    process.env.TRUSTED_PROXY_IPS = "127.0.0.1,172.20.0.1";
+
+    const headers = await get({ "x-real-ip": "203.0.113.9" }, "172.20.0.2");
+
+    expect(headers["x-9r-real-ip"]).toBe("172.20.0.2");
+  });
+
+  it("matches an IPv4-mapped trusted proxy against its configured IPv4 address", async () => {
+    process.env.TRUSTED_PROXY_IPS = "172.20.0.1";
+
+    const headers = await get({ "x-forwarded-for": "203.0.113.9, 10.0.0.1" }, "::ffff:172.20.0.1");
+
+    expect(headers["x-9r-real-ip"]).toBe("203.0.113.9");
   });
 
   // chat.js snapshots every client header into the request detail. Anything that grants

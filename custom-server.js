@@ -2,6 +2,7 @@ const http = require("http");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const net = require("net");
 const { pathToFileURL } = require("url");
 
 const origCreate = http.createServer.bind(http);
@@ -12,6 +13,20 @@ const origCreate = http.createServer.bind(http);
 // so the request-detail header sanitizer redacts it too.
 const PEER_TOKEN = crypto.randomBytes(24).toString("hex");
 process.env.NINEROUTER_PEER_TOKEN = PEER_TOKEN;
+
+function normalizeIp(ip) {
+  return net.isIPv6(ip) && ip.toLowerCase().startsWith("::ffff:") && net.isIPv4(ip.slice(7)) ? ip.slice(7) : ip;
+}
+
+function isTrustedProxy(socketIp) {
+  const normalizedSocketIp = normalizeIp(socketIp);
+  if (normalizedSocketIp === "127.0.0.1" || socketIp === "::1") return true;
+  return String(process.env.TRUSTED_PROXY_IPS || "")
+    .split(",")
+    .map((ip) => normalizeIp(ip.trim()))
+    .filter((ip) => net.isIP(ip))
+    .includes(normalizedSocketIp);
+}
 
 let backgroundRefreshStarted = false;
 
@@ -58,11 +73,11 @@ http.createServer = (...args) => {
     const xff = req.headers["x-forwarded-for"];
     const xRealIp = req.headers["x-real-ip"];
     const viaProxy = !!(xff || xRealIp);
-    const isLoopbackProxy = socketIp === "127.0.0.1" || socketIp === "::1" || socketIp === "::ffff:127.0.0.1";
-    // Trust forwarding headers only when the TCP peer is a local reverse proxy.
+    // Trust forwarding headers only from loopback or explicitly configured proxies.
     // Direct/public sockets remain keyed by the unspoofable peer address.
-    const proxyIp = xRealIp || (xff ? String(xff).split(",")[0].trim() : "");
-    const ip = isLoopbackProxy && proxyIp ? proxyIp : socketIp;
+    const forwardedIp = xRealIp || (xff ? String(xff).split(",")[0].trim() : "");
+    const proxyIp = net.isIP(forwardedIp) ? forwardedIp : "";
+    const ip = isTrustedProxy(socketIp) && proxyIp ? proxyIp : socketIp;
     delete req.headers["x-9r-real-ip"];
     delete req.headers["x-forwarded-for"];
     delete req.headers["x-9r-via-proxy"];

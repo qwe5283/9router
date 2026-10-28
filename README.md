@@ -50,6 +50,15 @@ docker compose up -d --no-build
 - **`INITIAL_PASSWORD`**：尚未单独设置 Dashboard 密码时使用的初始登录密码，启动后可通过该值登录 Dashboard。
 - **`API_KEY_SECRET`**：用于生成和校验 9Router API Key 的 HMAC 密钥，不是上游 AI 服务商的 API Key。
 - **`MACHINE_ID_SALT`**：对机器 ID 进行哈希时使用的盐值，用于生成实例标识并避免直接暴露原始机器 ID。
+- **`TRUSTED_PROXY_IPS`**（可选）：允许提供 `X-Real-IP` / `X-Forwarded-For` 的反向代理 IP，多个地址用逗号分隔。Nginx 经 Docker 网桥转发时，可用于让 Dashboard 登录记录和限流识别真实客户端 IP，而不是记录网桥地址。回环代理始终受信任。
+
+例如，Nginx 到容器的来源地址为 `172.20.0.1` 时，在 `.env` 中设置：
+
+```dotenv
+TRUSTED_PROXY_IPS=127.0.0.1,172.20.0.1
+```
+
+仅填写实际受信任的代理地址，不要配置整个 Docker 私网，否则同网段客户端可能伪造 IP、绕过限流。
 
 启动后可访问：
 - Dashboard：http://localhost:20128/dashboard
