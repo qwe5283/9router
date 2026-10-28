@@ -287,6 +287,33 @@ describe("dashboard guard local-only access", () => {
   });
 });
 
+describe("dashboard login history access", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getSettings.mockResolvedValue({ requireLogin: true });
+    mocks.getConsistentMachineId.mockResolvedValue("cli-token");
+    mocks.verifyDashboardAuthToken.mockResolvedValue(false);
+  });
+
+  it("rejects unauthenticated login-history requests", async () => {
+    const response = await proxy(request("/api/settings/login-history"));
+    expect(response.status).toBe(401);
+  });
+
+  it("allows login-history requests with a valid dashboard session", async () => {
+    mocks.verifyDashboardAuthToken.mockResolvedValue(true);
+    const req = request("/api/settings/login-history");
+    req.cookies.get.mockReturnValue({ value: "valid-session" });
+    expect(await proxy(req)).toBe(mocks.nextResponse);
+    expect(mocks.verifyDashboardAuthToken).toHaveBeenCalledWith("valid-session");
+  });
+
+  it("follows dashboard access settings when login is disabled", async () => {
+    mocks.getSettings.mockResolvedValue({ requireLogin: false });
+    expect(await proxy(request("/api/settings/login-history"))).toBe(mocks.nextResponse);
+  });
+});
+
 describe("dashboard guard helpers", () => {
   it("extracts bearer API keys before x-api-key", () => {
     const apiRequest = request("/v1/chat/completions", {

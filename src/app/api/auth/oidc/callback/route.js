@@ -10,6 +10,7 @@ import {
   verifyOidcIdToken,
 } from "@/lib/auth/oidc";
 import { setDashboardAuthCookie } from "@/lib/auth/dashboardSession";
+import { recordDashboardLogin } from "@/lib/auth/loginHistory";
 
 function clearOidcCookies(cookieStore) {
   cookieStore.delete("oidc_state");
@@ -18,15 +19,18 @@ function clearOidcCookies(cookieStore) {
 }
 
 export async function GET(request) {
+  const logAttempt = (success, reason) => recordDashboardLogin(request, { method: "oidc", success, reason });
   const url = new URL(request.url);
   const error = url.searchParams.get("error");
   if (error) {
+    await logAttempt(false, "provider_error");
     return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error)}`, getPublicOrigin(request)));
   }
 
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   if (!code || !state) {
+    await logAttempt(false, "missing_code");
     return NextResponse.redirect(new URL("/login?error=oidc_missing_code", getPublicOrigin(request)));
   }
 
@@ -37,6 +41,7 @@ export async function GET(request) {
 
   if (!storedState || !storedNonce || !codeVerifier || storedState !== state) {
     clearOidcCookies(cookieStore);
+    await logAttempt(false, "invalid_state");
     return NextResponse.redirect(new URL("/login?error=oidc_invalid_state", getPublicOrigin(request)));
   }
 
@@ -44,6 +49,7 @@ export async function GET(request) {
     const config = await getOidcRuntimeConfig();
     if (!config) {
       clearOidcCookies(cookieStore);
+      await logAttempt(false, "not_configured");
       return NextResponse.redirect(new URL("/login?error=oidc_not_configured", getPublicOrigin(request)));
     }
 
@@ -78,10 +84,12 @@ export async function GET(request) {
       oidcEmail: pickOidcEmail(payload) || null,
       oidcName: pickOidcDisplayName(payload),
     });
+    await logAttempt(true);
 
     return NextResponse.redirect(new URL("/dashboard", getPublicOrigin(request)));
   } catch (error) {
     clearOidcCookies(cookieStore);
+    await logAttempt(false, "oidc_callback_failed");
     return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error.message || "oidc_callback_failed")}`, getPublicOrigin(request)));
   }
 }

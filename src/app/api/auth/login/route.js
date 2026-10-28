@@ -7,6 +7,7 @@ import { isOidcConfigured } from "@/lib/auth/oidc";
 import { isSamlConfigured } from "@/lib/auth/saml.js";
 import { checkLock, recordFail, recordSuccess, getClientIp } from "@/lib/auth/loginLimiter";
 import { isLocalRequest } from "@/dashboardGuard";
+import { recordDashboardLogin } from "@/lib/auth/loginHistory";
 
 const RESET_HINT = "Forgot password? Reset to default via 9Router CLI → Settings → Reset Password to Default.";
 const NO_STORE_HEADERS = { "Cache-Control": "no-store" };
@@ -19,10 +20,12 @@ function isTunnelRequest(request, settings) {
 }
 
 export async function POST(request) {
+  const logAttempt = (success, reason) => recordDashboardLogin(request, { method: "password", success, reason });
   try {
     const ip = getClientIp(request);
     const lock = checkLock(ip);
     if (lock.locked) {
+      await logAttempt(false, "rate_limited");
       return NextResponse.json(
         { error: `Too many failed attempts. Try again in ${lock.retryAfter}s. ${RESET_HINT}`, retryAfter: lock.retryAfter, resetHint: RESET_HINT },
         { status: 429, headers: { "Retry-After": String(lock.retryAfter) } }
@@ -30,10 +33,15 @@ export async function POST(request) {
     }
 
     const { password } = await request.json();
+    if (typeof password !== "string" || !password) {
+      await logAttempt(false, "invalid_request");
+      return NextResponse.json({ error: "Password required" }, { status: 400 });
+    }
     const settings = await getSettings();
 
     // Block login via tunnel/tailscale if dashboard access is disabled
     if (isTunnelRequest(request, settings) && settings.tunnelDashboardAccess !== true) {
+      await logAttempt(false, "dashboard_access_disabled");
       return NextResponse.json({ error: "Dashboard access via tunnel is disabled" }, { status: 403 });
     }
 
@@ -43,9 +51,11 @@ export async function POST(request) {
     if (settings.authMode === "sso" || settings.authMode === "saml" || settings.authMode === "oidc") {
       const ssoType = settings.ssoType || (settings.authMode === "saml" ? "saml" : "oidc");
       if (ssoType === "saml" && isSamlConfigured(settings)) {
+        await logAttempt(false, "password_login_disabled");
         return NextResponse.json({ error: "Password login is disabled. Use SAML SSO sign in." }, { status: 403 });
       }
       if (ssoType === "oidc" && isOidcConfigured(settings)) {
+        await logAttempt(false, "password_login_disabled");
         return NextResponse.json({ error: "Password login is disabled. Use OIDC sign in." }, { status: 403 });
       }
     }
@@ -68,6 +78,7 @@ export async function POST(request) {
         !storedHash && !process.env.INITIAL_PASSWORD && !isLocalRequest(request);
 
       if (mustChangePassword) {
+        await logAttempt(false, "default_password");
         // Do NOT issue a session token: a fresh install's default password is
         // public knowledge ("123456"), so handing out a valid JWT would let any
         // remote attacker authenticate and (e.g.) PATCH /api/settings to disable
@@ -89,12 +100,14 @@ export async function POST(request) {
 
       const cookieStore = await cookies();
       await setDashboardAuthCookie(cookieStore, request);
+      await logAttempt(true);
 
       return NextResponse.json({ success: true, mustChangePassword: false }, { headers: NO_STORE_HEADERS });
     }
 
     const { remainingBeforeLock } = recordFail(ip);
     const postLock = checkLock(ip);
+    await logAttempt(false, "invalid_password");
     if (postLock.locked) {
       return NextResponse.json(
         { error: `Too many failed attempts. Try again in ${postLock.retryAfter}s. ${RESET_HINT}`, retryAfter: postLock.retryAfter, resetHint: RESET_HINT },
@@ -106,6 +119,7 @@ export async function POST(request) {
       { status: 401 }
     );
   } catch (error) {
+    await logAttempt(false, "server_error");
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }

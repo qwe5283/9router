@@ -10,11 +10,13 @@ import {
   getPublicOrigin,
 } from "@/lib/auth/oidc";
 import { shouldUseSecureCookie } from "@/lib/auth/dashboardSession";
+import { recordDashboardLogin } from "@/lib/auth/loginHistory";
 
 export async function GET(request) {
   try {
     const config = await getOidcRuntimeConfig();
     if (!config) {
+      await recordDashboardLogin(request, { method: "oidc", reason: "not_configured" });
       return NextResponse.redirect(new URL("/login?error=oidc_not_configured", getPublicOrigin(request)));
     }
 
@@ -47,6 +49,7 @@ export async function GET(request) {
 
     return NextResponse.redirect(authUrl);
   } catch (error) {
+    await recordDashboardLogin(request, { method: "oidc", reason: "oidc_start_failed" });
     return NextResponse.redirect(new URL(`/login?error=${encodeURIComponent(error.message || "oidc_start_failed")}`, getPublicOrigin(request)));
   }
 }
