@@ -16,6 +16,7 @@ RUN if [ "$ALPINE_MIRROR" != "dl-cdn.alpinelinux.org" ]; then \
 
 FROM base AS builder
 ARG NPM_REGISTRY
+ARG BUILD_NODE_OPTIONS=""
 
 RUN apk add --no-cache python3 make g++ linux-headers
 
@@ -31,7 +32,8 @@ RUN --mount=type=cache,target=/root/.npm \
 
 COPY . ./
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+# CI can size the compiler heap without changing the runtime image's Node flags.
+RUN NODE_OPTIONS="${BUILD_NODE_OPTIONS}" npm run build
 
 # https://github.com/decolua/9router/issues/5245
 # wreq-js and playwright-core are lazy runtime dependencies (loaded by
