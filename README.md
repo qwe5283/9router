@@ -114,6 +114,12 @@ docker compose down
 - 可从项目内置的 Provider 图标中搜索并选择，也可恢复默认头像。
 - 所选头像同步显示在 Provider 列表和详情页，并随节点配置持久化保存。
 
+### 5. Dashboard 登录历史记录
+
+- 记录密码、OIDC 和 SAML 登录尝试，在个人资料页面展示最近 20 条记录，最多保留 1,000 条。
+- 记录登录时间、结果、失败原因、登录方式、客户端 IP 和 User-Agent，不保存密码、Token 或身份提供商原始断言。
+- 支持通过 `TRUSTED_PROXY_IPS` 配置可信反向代理 IP，使 Nginx / Docker 部署在登录记录和限流中使用真实客户端 IP，而非 Docker 网桥地址。
+
 ## 常见问题（Q&A）
 
 ### 1. 开启透传、关闭回退会如何影响 Combo？
