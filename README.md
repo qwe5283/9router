@@ -81,6 +81,7 @@ docker compose down
 - 支持为 Provider 配置自定义 HTTP 请求头，覆盖内置的同名默认请求头，不受请求头名称大小写影响。
 - 扩展兼容执行器对自定义请求头的支持，覆盖 Cursor、GitHub Copilot 和 Zed。
 - 提供内置请求头恢复功能，并兼容已有的自定义请求头配置。
+- 支持“使用客户端 User-Agent”开关（默认关闭）：开启后优先将原始客户端的 `User-Agent` 转发给上游，客户端未提供时沿用自定义表单或 Provider 的默认配置。
 
 ### 2. 兼容 Provider 请求体透传
 
@@ -98,14 +99,7 @@ docker compose down
 - 请求来自 Combo 时也不会自动切换到其他模型。
 - 原样返回上游响应的同时，继续记录请求状态和用量信息。
 
-### 4. 复用客户端 User-Agent
-
-- Provider 自定义配置中新增“使用客户端 User-Agent”开关。
-- 开启后优先将原始客户端的 `User-Agent` 转发给上游。
-- 客户端未提供该请求头时，沿用自定义表单或 Provider 的默认配置。
-- 该开关默认关闭。
-
-### 5. 自定义 Provider 头像
+### 4. 自定义 Provider 头像
 
 - OpenAI Compatible、Anthropic Compatible 和 Custom Embedding 节点支持在新增或编辑时选择头像。
 - 可从项目内置的 Provider 图标中搜索并选择，也可恢复默认头像。
