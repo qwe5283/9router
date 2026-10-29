@@ -326,6 +326,7 @@ const PROVIDER_MODELS_CONFIG = {
   dahl: createOpenAIModelsConfig("https://inference.dahl.global/v1/models"),
   atria: createOpenAIModelsConfig("https://api.atria-asi.ai/v1/models"),
   agnes: createOpenAIModelsConfig("https://apihub.agnes-ai.com/v1/models"),
+  "agnes-cn": createOpenAIModelsConfig("https://apihub.agnes-ai.cn/v1/models"),
   bai: createOpenAIModelsConfig("https://api.b.ai/v1/models"),
   kimchi: {
     customResolver: async (connection) => {

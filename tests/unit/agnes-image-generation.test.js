@@ -10,18 +10,21 @@ const RESPONSE = { created: 1780000000, data: [{ url: "https://example.com/gener
 const jsonResponse = (body = RESPONSE, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-function generate(body = {}, options = {}) {
-  return handleImageGenerationCore({
-    body: { model: `agnes/${MODEL}`, prompt: "日出时分的浮空城市", ...body },
-    modelInfo: { provider: "agnes", model: MODEL },
-    credentials: { apiKey: "agnes-test-key" },
-    ...options,
-  });
-}
-
 const upstreamBody = () => JSON.parse(global.fetch.mock.calls[0][1].body);
 
-describe("Agnes image generation", () => {
+describe.each([
+  { provider: "agnes", baseUrl: "https://apihub.agnes-ai.com/v1/images/generations" },
+  { provider: "agnes-cn", baseUrl: "https://apihub.agnes-ai.cn/v1/images/generations" },
+])("$provider image generation", ({ provider, baseUrl }) => {
+  function generate(body = {}, options = {}) {
+    return handleImageGenerationCore({
+      body: { model: `${provider}/${MODEL}`, prompt: "日出时分的浮空城市", ...body },
+      modelInfo: { provider, model: MODEL },
+      credentials: { apiKey: "agnes-test-key" },
+      ...options,
+    });
+  }
+
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => jsonResponse()));
   });
@@ -30,14 +33,14 @@ describe("Agnes image generation", () => {
   });
 
   it("is selectable in the dashboard and publishes image metadata", async () => {
-    expect(getProvidersByKind("image").map((provider) => provider.id)).toContain("agnes");
-    expect(getProvidersByKind("llm").map((provider) => provider.id)).toContain("agnes");
-    expect(PROVIDER_MODELS.agnes.filter((model) => model.kind !== "image")).toHaveLength(4);
+    expect(getProvidersByKind("image").map((entry) => entry.id)).toContain(provider);
+    expect(getProvidersByKind("llm").map((entry) => entry.id)).toContain(provider);
+    expect(PROVIDER_MODELS[provider].filter((model) => model.kind !== "image")).toHaveLength(4);
 
-    const response = await getModelInfo(new Request(`http://localhost/v1/models/info?id=agnes/${MODEL}`));
+    const response = await getModelInfo(new Request(`http://localhost/v1/models/info?id=${provider}/${MODEL}`));
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
-      id: `agnes/${MODEL}`,
+      id: `${provider}/${MODEL}`,
       kind: "image",
       endpoint: "/v1/images/generations",
       capabilities: ["text2img", "edit"],
@@ -55,7 +58,7 @@ describe("Agnes image generation", () => {
 
     expect(result.success).toBe(true);
     expect(global.fetch).toHaveBeenCalledExactlyOnceWith(
-      "https://apihub.agnes-ai.com/v1/images/generations",
+      baseUrl,
       expect.objectContaining({
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: "Bearer agnes-test-key" },

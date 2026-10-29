@@ -797,6 +797,7 @@ async function testApiKeyConnection(connection, effectiveProxy = null) {
       case "dahl":
       case "atria":
       case "agnes":
+      case "agnes-cn":
       case "bai":
       case "muse":
       case "runcrate": {

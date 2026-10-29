@@ -256,9 +256,10 @@ docker compose down
 - [fcd16f57](https://github.com/qwe5283/9router/commit/fcd16f572125d59ec6ff6a99f657a336692ee93e)：手动构建、检查并发布 ACR 镜像，以及 `BUILD_NODE_OPTIONS` 构建参数。
 - [c6d7ade9](https://github.com/qwe5283/9router/commit/c6d7ade9b519193e44a13291dc06db33f357a6d6)：补充本地构建与仅创建配置文件拉取镜像的两种部署说明。
 
-### 8. Agnes 图像生成渠道
+### 8. Agnes 图像生成与 CN 渠道
 
-- 在文本转图像列表中增加 Agnes AI，预设供应商由 27 个增至 28 个；使用模型 `agnes/agnes-image-2.5-flash`，复用 Agnes 的 API Key 连接。
+- 在文本转图像列表中增加 Agnes AI 和 Agnes AI CN，预设供应商由 27 个增至 29 个；使用模型 `agnes/agnes-image-2.5-flash` 或 `agnes-cn/agnes-image-2.5-flash`，分别复用对应供应商的 API Key 连接。
+- Agnes AI CN 使用独立供应商 ID `agnes-cn`，共享 Agnes AI 的聊天模型、图像模型和请求适配；官网、Key 管理、聊天、图像、连接测试和模型列表地址的域名均由 `agnes-ai.com` 改为 `agnes-ai.cn`，保留原子域名与路径。两者的连接和 API Key 分开配置。
 - 通过 `POST /v1/images/generations` 支持文生图、参考图编辑与多图合成，默认生成一张 `1K`、`1:1` 图片，返回图片 URL。
 - Dashboard 示例支持选择 `1K` / `2K` / `3K` / `4K`、八种宽高比、URL / Base64 输出，以及填写单张参考图 URL / Data URI；API 多图输入使用 `image` 数组或 `extra_body.image`，支持公共图片 URL 和 Data URI。
 - 自动将客户端的 `response_format` 转为 Agnes 要求的 `extra_body.response_format`；文生图 Base64 输出同时设置 `return_base64: true`。兼容精确像素尺寸，但 Agnes 可能将其标准化；每次请求仅支持一张输出图片，`n` 省略或为 `1`。
@@ -267,6 +268,7 @@ docker compose down
 关联 commit：
 
 - [29b8cc58](https://github.com/qwe5283/9router/commit/29b8cc58ae73e7e65fc97eb62ae9958509e11642)：Agnes 图像供应商与模型配置、请求格式适配、Dashboard 尺寸和宽高比选择，以及渠道回归测试。
+- 本次工作区变更（提交后、推送前补齐真实 commit 链接）：新增 [Agnes AI CN 配置](./open-sse/providers/registry/agnes-cn.js)，复用 Agnes 图像适配，补齐 CN 连接测试与模型发现，并验证两个渠道的相同行为。
 
 ## 常见问题（Q&A）
 

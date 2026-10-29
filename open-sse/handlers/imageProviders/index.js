@@ -1,6 +1,6 @@
 // Image provider adapter registry
 import createOpenAIAdapter from "./openai.js";
-import agnes from "./agnes.js";
+import agnes, { createAgnesAdapter } from "./agnes.js";
 import gemini from "./gemini.js";
 import codex from "./codex.js";
 import sdwebui from "./sdwebui.js";
@@ -22,6 +22,7 @@ import ucWeb from "./uc-web.js";
 
 const ADAPTERS = {
   agnes,
+  "agnes-cn": createAgnesAdapter("agnes-cn"),
   openai: createOpenAIAdapter("openai"),
   minimax: createOpenAIAdapter("minimax"),
   openrouter: createOpenAIAdapter("openrouter"),
