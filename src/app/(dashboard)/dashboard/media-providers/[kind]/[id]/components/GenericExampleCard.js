@@ -50,6 +50,12 @@ export function GenericExampleCard({ providerId, kind }) {
   const allowManualModel = needsModel && kindModels.length === 0;
   const [selectedModel, setSelectedModel] = useState(kindModels[0]?.id ?? "");
   const selectedModelObj = kindModels.find((m) => m.id === selectedModel);
+  const exampleFields = (safeExConfig.extraFields || []).map((field) => {
+    const options = selectedModelObj?.options?.[field.key];
+    return Array.isArray(options) && options.length
+      ? { ...field, options, default: options[0] }
+      : field;
+  });
   const supportsEdit = !!selectedModelObj?.capabilities?.includes("edit");
   const supportsMask = !!selectedModelObj?.capabilities?.includes("mask");
 
@@ -58,7 +64,7 @@ export function GenericExampleCard({ providerId, kind }) {
   const [refImage, setRefImage] = useState("");
   const [maskImage, setMaskImage] = useState("");
   const [extraValues, setExtraValues] = useState(() =>
-    (safeExConfig.extraFields || []).reduce((acc, f) => { acc[f.key] = f.default ?? ""; return acc; }, {})
+    exampleFields.reduce((acc, f) => { acc[f.key] = f.default ?? ""; return acc; }, {})
   );
   const [apiKey, setApiKey] = useState("");
   const [useTunnel, setUseTunnel] = useState(false);
@@ -112,7 +118,12 @@ export function GenericExampleCard({ providerId, kind }) {
   const maskImagePreviewSrc = toImagePreviewSrc(effectiveMaskImage);
 
   // Build request body with optional extra fields (only non-empty values)
-  const extraBodyFromFields = Object.entries(extraValues).reduce((acc, [k, v]) => {
+  // Switching models can change select options; fall back to that model's default.
+  const effectiveExtraValues = Object.fromEntries(exampleFields.map((field) => {
+    const value = extraValues[field.key];
+    return [field.key, field.type === "select" && !field.options.includes(value) ? field.default : value];
+  }));
+  const extraBodyFromFields = Object.entries(effectiveExtraValues).reduce((acc, [k, v]) => {
     if (v === "" || v === null || v === undefined) return acc;
     if (typeof v === "number" && Number.isNaN(v)) return acc;
     acc[k] = v;
@@ -441,13 +452,13 @@ export function GenericExampleCard({ providerId, kind }) {
         )}
 
         {/* Extra fields — for kinds without model concept (webSearch/webFetch), show all; otherwise filter by model.params */}
-        {(exConfig.extraFields || [])
+        {exampleFields
           .filter((f) => kindModels.length === 0 || (Array.isArray(selectedModelObj?.params) && selectedModelObj.params.includes(f.key)))
           .map((f) => (
           <Row key={f.key} label={f.label}>
             {f.type === "select" ? (
               <select
-                value={extraValues[f.key] ?? ""}
+                value={effectiveExtraValues[f.key] ?? ""}
                 onChange={(e) => setExtraValues((s) => ({ ...s, [f.key]: e.target.value }))}
                 className="w-full px-3 py-1.5 text-sm border border-border rounded-lg bg-background focus:outline-none focus:border-primary"
               >

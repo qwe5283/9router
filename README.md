@@ -256,6 +256,16 @@ docker compose down
 - [fcd16f57](https://github.com/qwe5283/9router/commit/fcd16f572125d59ec6ff6a99f657a336692ee93e)：手动构建、检查并发布 ACR 镜像，以及 `BUILD_NODE_OPTIONS` 构建参数。
 - [c6d7ade9](https://github.com/qwe5283/9router/commit/c6d7ade9b519193e44a13291dc06db33f357a6d6)：补充本地构建与仅创建配置文件拉取镜像的两种部署说明。
 
+### 8. Agnes 图像生成渠道
+
+- 在文本转图像列表中增加 Agnes AI，预设供应商由 27 个增至 28 个；使用模型 `agnes/agnes-image-2.5-flash`，复用 Agnes 的 API Key 连接。
+- 通过 `POST /v1/images/generations` 支持文生图、参考图编辑与多图合成，默认生成一张 `1K`、`1:1` 图片，返回图片 URL。
+- Dashboard 示例支持选择 `1K` / `2K` / `3K` / `4K`、八种宽高比、URL / Base64 输出，以及填写单张参考图 URL / Data URI；API 多图输入使用 `image` 数组或 `extra_body.image`，支持公共图片 URL 和 Data URI。
+- 自动将客户端的 `response_format` 转为 Agnes 要求的 `extra_body.response_format`；文生图 Base64 输出同时设置 `return_base64: true`。兼容精确像素尺寸，但 Agnes 可能将其标准化；每次请求仅支持一张输出图片，`n` 省略或为 `1`。
+- 接口行为依据 [Agnes Image 2.5 Flash 官方文档](https://www.agnes-ai.com/zh-Hans/docs/agnes-image-25-flash)。
+
+关联实现与验证（本次工作区变更，提交后、推送前补齐真实 commit 短哈希和仓库链接）：[供应商与模型配置](./open-sse/providers/registry/agnes.js)、[图像适配器](./open-sse/handlers/imageProviders/agnes.js)、[渠道测试](./tests/unit/agnes-image-generation.test.js)。
+
 ## 常见问题（Q&A）
 
 ### 1. 开启透传、关闭回退会如何影响 Combo？
