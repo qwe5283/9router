@@ -83,7 +83,7 @@ docker compose down
 
 ## 相比上游的 rebase 功能清单
 
-以下功能基于 `3a978a6` 首次 fork 以来的差异整理。
+本分支首次 fork 于 `3a978a6`，以下清单记录当前相比上游仍保留的功能差异。每次新增或修改功能后，推送前检查最新 `origin` 与 `upstream` 的差异，并同步更新本清单；具体流程见 [AGENTS.md](./AGENTS.md)。
 
 ### 1. 自定义 Provider 请求头
 
@@ -119,6 +119,18 @@ docker compose down
 - 记录密码、OIDC 和 SAML 登录尝试，在个人资料页面展示最近 20 条记录，最多保留 1,000 条。
 - 记录登录时间、结果、失败原因、登录方式、客户端 IP 和 User-Agent，不保存密码、Token 或身份提供商原始断言。
 - 支持通过 `TRUSTED_PROXY_IPS` 配置可信反向代理 IP，使 Nginx / Docker 部署在登录记录和限流中使用真实客户端 IP，而非 Docker 网桥地址。
+
+### 6. 请求日志与可观测性配置修复
+
+- `ENABLE_REQUEST_LOGS` 仅控制请求调试日志，不再覆盖 Dashboard 的可观测性开关。
+- 请求详情记录优先遵循 Dashboard 的 `enableObservability` 设置，未设置时使用 `OBSERVABILITY_ENABLED` 作为默认值。
+
+### 7. 本地源码构建与 ACR 镜像发布
+
+- Docker Compose 默认从当前源码构建 `9router:local` 镜像，使部署包含本分支的功能变更。
+- 本机部署定制放入不纳入版本控制的 `docker-compose.override.yml`，避免将主机配置带入仓库。
+- 支持手动触发 GitHub Actions 构建 `linux/amd64` 镜像，通过容器健康检查后发布到阿里云 ACR，同时更新指定标签和 `latest`，并校验两者指向同一镜像。
+- Docker 构建支持通过 `BUILD_NODE_OPTIONS` 单独设置编译阶段的 Node.js 参数。
 
 ## 常见问题（Q&A）
 
