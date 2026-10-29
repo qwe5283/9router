@@ -183,6 +183,11 @@ docker compose down
 - 提供内置请求头恢复功能，并兼容已有的自定义请求头配置。
 - 支持“使用客户端 User-Agent”开关（默认关闭）：开启后优先将原始客户端的 `User-Agent` 转发给上游，客户端未提供时沿用自定义表单或 Provider 的默认配置。
 
+关联 commit：
+
+- [c1c88283](https://github.com/qwe5283/9router/commit/c1c882837cab2a358103c4e8c095927e93801cf5)：兼容 Provider 自定义请求头及内置请求头恢复。
+- [bd53fea6](https://github.com/qwe5283/9router/commit/bd53fea679444bab1fd54388b9748c44cf1e6148)：客户端 User-Agent 复用开关，以及 Cursor、GitHub Copilot 和 Zed 的请求头支持。
+
 ### 2. 兼容 Provider 请求体透传
 
 - 为 OpenAI Compatible 和 Anthropic Compatible Provider 增加“透传”开关。
@@ -190,6 +195,10 @@ docker compose down
 - 跳过格式转换、请求规范化、工具去重、Provider Thinking 注入及 Token Saver 等请求改写。
 - 原样转发上游 HTTP 或 SSE 响应，同时保留用量统计与请求日志。
 - 使用时应确保客户端请求格式与上游接口一致；该模式默认关闭。
+
+关联 commit：
+
+- [dd9c82fe](https://github.com/qwe5283/9router/commit/dd9c82feccb1a946d4797439e55e40da6671f87a)：请求体透传开关、原始响应转发及用量记录。
 
 ### 3. 可配置的重试与回退策略
 
@@ -199,11 +208,19 @@ docker compose down
 - 请求来自 Combo 时也不会自动切换到其他模型。
 - 原样返回上游响应的同时，继续记录请求状态和用量信息。
 
+关联 commit：
+
+- [d6524c27](https://github.com/qwe5283/9router/commit/d6524c27135fb370ee50d9a2b9a44c579a4437be)：回退开关、原始错误响应，以及账号和 Combo 回退控制。
+
 ### 4. 自定义 Provider 头像
 
 - OpenAI Compatible、Anthropic Compatible 和 Custom Embedding 节点支持在新增或编辑时选择头像。
 - 可从项目内置的 Provider 图标中搜索并选择，也可恢复默认头像。
 - 所选头像同步显示在 Provider 列表和详情页，并随节点配置持久化保存。
+
+关联 commit：
+
+- [6fe15103](https://github.com/qwe5283/9router/commit/6fe151034527d419bd228c81a15c222f72b2aa10)：自定义 Provider 头像选择、持久化和界面展示。
 
 ### 5. Dashboard 登录历史记录
 
@@ -211,10 +228,19 @@ docker compose down
 - 记录登录时间、结果、失败原因、登录方式、客户端 IP 和 User-Agent，不保存密码、Token 或身份提供商原始断言。
 - 支持通过 `TRUSTED_PROXY_IPS` 配置可信反向代理 IP，使 Nginx / Docker 部署在登录记录和限流中使用真实客户端 IP，而非 Docker 网桥地址。
 
+关联 commit：
+
+- [b6e96aa9](https://github.com/qwe5283/9router/commit/b6e96aa97d7a3e47ecfb37f680d3d5f9d2ba73a1)：密码、OIDC 和 SAML 登录历史的记录与展示。
+- [1b871584](https://github.com/qwe5283/9router/commit/1b8715846ed325360f2bc36e8491c58b2b7c1c38)：可信反向代理配置和真实客户端 IP 识别。
+
 ### 6. 请求日志与可观测性配置修复
 
 - `ENABLE_REQUEST_LOGS` 仅控制请求调试日志，不再覆盖 Dashboard 的可观测性开关。
 - 请求详情记录优先遵循 Dashboard 的 `enableObservability` 设置，未设置时使用 `OBSERVABILITY_ENABLED` 作为默认值。
+
+关联 commit：
+
+- [42df8882](https://github.com/qwe5283/9router/commit/42df8882880448dfc21bd80090096b649e39ed9d)：修复 `ENABLE_REQUEST_LOGS` 覆盖可观测性配置的问题。
 
 ### 7. 本地源码构建与 ACR 镜像发布
 
@@ -222,6 +248,13 @@ docker compose down
 - 本机部署定制放入不纳入版本控制的 `docker-compose.override.yml`，避免将主机配置带入仓库。
 - 支持手动触发 GitHub Actions 构建 `linux/amd64` 镜像，通过容器健康检查后发布到阿里云 ACR，同时更新指定标签和 `latest`，并校验两者指向同一镜像。
 - Docker 构建支持通过 `BUILD_NODE_OPTIONS` 单独设置编译阶段的 Node.js 参数。
+
+关联 commit：
+
+- [1a7d7f65](https://github.com/qwe5283/9router/commit/1a7d7f658dd9d4f6010b70114cc359edfc8f7ee0)：Compose 改为本地源码构建，并补充随机密码和密钥生成步骤。
+- [36df3a7a](https://github.com/qwe5283/9router/commit/36df3a7aaa63ed704972207e2f3b03dddb6adc35)：将本机配置移入不纳入版本控制的 Compose override 文件。
+- [fcd16f57](https://github.com/qwe5283/9router/commit/fcd16f572125d59ec6ff6a99f657a336692ee93e)：手动构建、检查并发布 ACR 镜像，以及 `BUILD_NODE_OPTIONS` 构建参数。
+- [c6d7ade9](https://github.com/qwe5283/9router/commit/c6d7ade9b519193e44a13291dc06db33f357a6d6)：补充本地构建与仅创建配置文件拉取镜像的两种部署说明。
 
 ## 常见问题（Q&A）
 
