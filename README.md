@@ -7,12 +7,17 @@
 
 ## 快速开始
 
-准备 Docker、Docker Compose、Git、`sed` 和 OpenSSL，然后在 Linux 或 WSL 终端中克隆并启动：
+准备 Docker、Docker Compose 和 OpenSSL，以下命令在 Linux 或 WSL 的 Bash 终端中执行。选择一种部署方式即可；两种方式均会启动 9Router 和 Headroom，并将应用数据保存在 `9router-data` Docker volume 中。
+
+### 方式一：克隆项目，本地构建
+
+适合需要自行修改代码或部署本分支最新源码的场景，另需安装 Git 和 `sed`。
 
 ```bash
 git clone https://github.com/qwe5283/9router.git
 cd 9router
 cp .env.example .env
+chmod 600 .env
 
 # 生成随机初始密码和密钥，并写入 .env
 sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$(openssl rand -hex 32)|" .env
@@ -39,12 +44,98 @@ docker build \
   --build-arg ALPINE_MIRROR=mirrors.aliyun.com \
   --build-arg NPM_REGISTRY=https://registry.npmmirror.com \
   -t 9router:local .
-docker compose up -d --no-build
+docker compose up -d --no-build --pull never
 ```
 
-以上换源仅影响 APK 和 npm；如果 Docker Hub 或 GHCR 镜像拉取失败，还需在 Docker 中配置可信的镜像加速器或网络代理。更新代码后，中国大陆地区同样使用以上 `docker build` 和 `docker compose up -d --no-build` 命令重新构建并启动。
+以上换源仅影响 APK 和 npm；如果 Docker Hub 或 GHCR 镜像拉取失败，还需在 Docker 中配置可信的镜像加速器或网络代理。
 
-请妥善保管 `.env`，不要提交或泄露其中的密码和密钥。Compose 会从当前源码构建镜像，并同时启动 Headroom；数据保存在 `9router-data` Docker volume 中。
+后续更新时，在项目目录执行：
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+使用国内构建源时，`git pull` 后重新执行上面的 `docker build` 和 `docker compose up -d --no-build --pull never` 命令。
+
+### 方式二：仅创建配置文件，拉取镜像启动
+
+无需克隆仓库或本地编译，只需创建 `.env` 和 `docker-compose.yml`。使用本项目已发布的阿里云 ACR 镜像，当前发布架构为 `linux/amd64`；其他架构可使用方式一本地构建，或自行配置容器模拟运行。
+
+创建部署目录并生成 `.env`：
+
+```bash
+mkdir -p 9router-deploy
+cd 9router-deploy
+
+cat > .env <<EOF
+JWT_SECRET=$(openssl rand -hex 32)
+INITIAL_PASSWORD=$(openssl rand -hex 16)
+API_KEY_SECRET=$(openssl rand -hex 32)
+MACHINE_ID_SALT=$(openssl rand -hex 32)
+ENABLE_REQUEST_LOGS=false
+OBSERVABILITY_ENABLED=true
+AUTH_COOKIE_SECURE=false
+REQUIRE_API_KEY=false
+BASE_URL=http://localhost:20128
+NEXT_PUBLIC_BASE_URL=http://localhost:20128
+EOF
+chmod 600 .env
+```
+
+在同一目录创建 `docker-compose.yml`，写入以下内容：
+
+```yaml
+services:
+  9router:
+    image: crpi-pmwtbactowtr55vh.cn-beijing.personal.cr.aliyuncs.com/qwe5283/9router:latest
+    platform: linux/amd64
+    container_name: 9router
+    restart: always
+    ports:
+      - "20128:20128"
+    volumes:
+      - 9router-data:/app/data
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /app/data
+      PORT: "20128"
+      HOSTNAME: "0.0.0.0"
+      NODE_ENV: production
+      HEADROOM_URL: http://headroom:8787
+    depends_on:
+      - headroom
+
+  headroom:
+    image: ghcr.io/chopratejas/headroom:latest
+    container_name: headroom
+    restart: always
+    ports:
+      - "127.0.0.1:8787:8787"
+
+volumes:
+  9router-data:
+    name: 9router-data
+```
+
+拉取镜像并启动：
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+需要固定版本时，将 `latest` 替换为已发布的镜像标签。后续更新时，在部署目录重新执行：
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+### 配置说明与访问地址
+
+两种方式的初始 Dashboard 登录密码均为 `.env` 中的 `INITIAL_PASSWORD`。首次生成后可打开 `.env` 查看；后续更新保留原有 `.env`，继续使用已有密码和密钥。请妥善保管该文件，不要提交或泄露其中的内容。
 
 - **`JWT_SECRET`**：用于签名和验证 Dashboard 登录会话的 JWT 密钥，防止他人伪造登录状态。
 - **`INITIAL_PASSWORD`**：尚未单独设置 Dashboard 密码时使用的初始登录密码，启动后可通过该值登录 Dashboard。
@@ -61,11 +152,14 @@ TRUSTED_PROXY_IPS=127.0.0.1,172.20.0.1
 仅填写实际受信任的代理地址，不要配置整个 Docker 私网，否则同网段客户端可能伪造 IP、绕过限流。
 
 启动后可访问：
+
 - Dashboard：http://localhost:20128/dashboard
 - OpenAI 兼容 API：http://localhost:20128/v1
 - Headroom：http://localhost:8787
 
-常用命令：
+远程部署时，将访问地址及 `.env` 中的 `BASE_URL`、`NEXT_PUBLIC_BASE_URL` 改为实际地址；Headroom 的端口默认仅允许部署主机本地访问。
+
+两种方式通用的管理命令：
 
 ```bash
 # 查看启动状态
@@ -73,9 +167,6 @@ docker compose ps
 
 # 查看日志
 docker compose logs -f
-
-# 更新源码后重新构建并启动
-docker compose up -d --build
 
 # 停止服务（保留数据）
 docker compose down
