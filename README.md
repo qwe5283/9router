@@ -268,7 +268,7 @@ docker compose down
 关联 commit：
 
 - [29b8cc58](https://github.com/qwe5283/9router/commit/29b8cc58ae73e7e65fc97eb62ae9958509e11642)：Agnes 图像供应商与模型配置、请求格式适配、Dashboard 尺寸和宽高比选择，以及渠道回归测试。
-- 本次工作区变更（提交后、推送前补齐真实 commit 链接）：新增 [Agnes AI CN 配置](./open-sse/providers/registry/agnes-cn.js)，复用 Agnes 图像适配，补齐 CN 连接测试与模型发现，并验证两个渠道的相同行为。
+- [7cef5691](https://github.com/qwe5283/9router/commit/7cef56910d26284a687b47f217e92114ec733da4)：新增 Agnes AI CN，复用 Agnes 的模型配置与图像适配，补齐 CN 连接测试、模型发现和图标，并验证两个渠道的相同行为。
 
 ## 常见问题（Q&A）
 
