@@ -264,7 +264,9 @@ docker compose down
 - 自动将客户端的 `response_format` 转为 Agnes 要求的 `extra_body.response_format`；文生图 Base64 输出同时设置 `return_base64: true`。兼容精确像素尺寸，但 Agnes 可能将其标准化；每次请求仅支持一张输出图片，`n` 省略或为 `1`。
 - 接口行为依据 [Agnes Image 2.5 Flash 官方文档](https://www.agnes-ai.com/zh-Hans/docs/agnes-image-25-flash)。
 
-关联实现与验证（本次工作区变更，提交后、推送前补齐真实 commit 短哈希和仓库链接）：[供应商与模型配置](./open-sse/providers/registry/agnes.js)、[图像适配器](./open-sse/handlers/imageProviders/agnes.js)、[渠道测试](./tests/unit/agnes-image-generation.test.js)。
+关联 commit：
+
+- [29b8cc58](https://github.com/qwe5283/9router/commit/29b8cc58ae73e7e65fc97eb62ae9958509e11642)：Agnes 图像供应商与模型配置、请求格式适配、Dashboard 尺寸和宽高比选择，以及渠道回归测试。
 
 ## 常见问题（Q&A）
 
