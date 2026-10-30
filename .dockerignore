@@ -8,6 +8,7 @@
 
 # Dependencies and build output
 node_modules
+**/node_modules
 .next
 out
 build
@@ -17,6 +18,7 @@ coverage
 # Runtime data and logs
 data
 logs
+.scratch
 
 # Local env files (inject at runtime via --env-file or -e)
 .env
