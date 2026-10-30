@@ -234,6 +234,17 @@ export async function getProviderCredentials(provider, excludeConnectionIds = nu
   }
 }
 
+/** Record a request failure for the dashboard without locking or backing off the account. */
+export async function recordAccountError(connectionId, status, errorText) {
+  if (!connectionId || connectionId === "noauth") return;
+  await updateProviderConnection(connectionId, {
+    testStatus: "error",
+    lastError: typeof errorText === "string" ? errorText.slice(0, 200) : "Provider error",
+    errorCode: status,
+    lastErrorAt: new Date().toISOString(),
+  });
+}
+
 /**
  * Mark account+model as unavailable — locks modelLock_${model} in DB.
  * All errors (429, 401, 5xx, etc.) lock per model, not per account.

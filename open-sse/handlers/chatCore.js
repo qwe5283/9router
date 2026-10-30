@@ -62,7 +62,7 @@ export function stripContinuityFields(body) {
   return body;
 }
 
-export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, customPromptEnabled, customPrompt, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking, providerOverrides }) {
+export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onRequestError, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, headroomEnabled, headroomUrl, headroomCompressUserMessages, headroomTimeoutMs, cavemanEnabled, cavemanLevel, ponytailEnabled, ponytailLevel, customPromptEnabled, customPrompt, pxpipeEnabled, pxpipeMinChars, pxpipeTimeoutMs, pxpipeTransform, onPxpipeEvent, sourceFormatOverride, providerThinking, providerOverrides }) {
   const { provider, model } = modelInfo;
   const requestPassthrough = isCompatibleProvider(provider) && providerOverrides?.passthrough === true;
   const fallbackEnabled = isProviderFallbackEnabled(provider, providerOverrides);
@@ -356,7 +356,10 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
       trackPendingRequest(model, provider, connectionId, false);
       if (onDisconnect) onDisconnect(reason);
     },
-    onError: () => trackPendingRequest(model, provider, connectionId, false),
+    onError: (error) => {
+      trackPendingRequest(model, provider, connectionId, false);
+      if (onRequestError) Promise.resolve().then(() => onRequestError(HTTP_STATUS.BAD_GATEWAY, error.message)).catch(() => {});
+    },
     log, provider, model, reqTag
   });
 
@@ -528,7 +531,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   const trackDone = () => trackPendingRequest(model, provider, connectionId, false);
 
   if (requestPassthrough || !fallbackEnabled) {
-    return handlePassthroughResponse({ ...sharedCtx, providerResponse, streamController, trackDone, appendLog });
+    return handlePassthroughResponse({ ...sharedCtx, onRequestError, providerResponse, streamController, trackDone, appendLog });
   }
 
   // Provider forced streaming but client wants JSON. The Responses wire always

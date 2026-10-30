@@ -207,10 +207,12 @@ docker compose down
 - 上游错误按原始 HTTP 状态、响应头和响应体返回，包括 SSE 错误。
 - 请求来自 Combo 时也不会自动切换到其他模型。
 - 原样返回上游响应的同时，继续记录请求状态和用量信息。
+- 关闭回退后仍记录聊天请求的 HTTP、网络及可识别的 SSE 错误，将最近错误前 200 字符、错误码和时间保存到连接，供 Dashboard 展示；只记录诊断，不新增冷却锁或触发重试、账号及 Combo 切换，后续成功请求可清除错误。
 
 关联 commit：
 
 - [d6524c27](https://github.com/qwe5283/9router/commit/d6524c27135fb370ee50d9a2b9a44c579a4437be)：回退开关、原始错误响应，以及账号和 Combo 回退控制。
+- 关闭回退后的错误记录修复：实现见 [聊天处理器](./src/sse/handlers/chat.js)、[连接错误记录](./src/sse/services/auth.js) 和 [透传响应观察](./open-sse/handlers/chatCore/passthroughHandler.js)，验证见 [回归测试](./tests/unit/chat-fallback-disabled-errors.test.js)。修复 commit 的真实哈希链接在推送前补齐。
 
 ### 4. 自定义 Provider 头像
 
@@ -248,6 +250,7 @@ docker compose down
 - 本机部署定制放入不纳入版本控制的 `docker-compose.override.yml`，避免将主机配置带入仓库。
 - 支持手动触发 GitHub Actions 构建 `linux/amd64` 镜像，通过容器健康检查后发布到阿里云 ACR，同时更新指定标签和 `latest`，并校验两者指向同一镜像。
 - Docker 构建支持通过 `BUILD_NODE_OPTIONS` 单独设置编译阶段的 Node.js 参数。
+- Docker 构建上下文排除各级 `node_modules` 和本机 `.scratch` 目录，避免打包本地依赖和临时文件。
 
 关联 commit：
 
@@ -255,6 +258,7 @@ docker compose down
 - [36df3a7a](https://github.com/qwe5283/9router/commit/36df3a7aaa63ed704972207e2f3b03dddb6adc35)：将本机配置移入不纳入版本控制的 Compose override 文件。
 - [fcd16f57](https://github.com/qwe5283/9router/commit/fcd16f572125d59ec6ff6a99f657a336692ee93e)：手动构建、检查并发布 ACR 镜像，以及 `BUILD_NODE_OPTIONS` 构建参数。
 - [c6d7ade9](https://github.com/qwe5283/9router/commit/c6d7ade9b519193e44a13291dc06db33f357a6d6)：补充本地构建与仅创建配置文件拉取镜像的两种部署说明。
+- [48c7f428](https://github.com/qwe5283/9router/commit/48c7f42818430cc1a77feeeca947d8adf0ad2a05)：补齐各级依赖目录和本机 `.scratch` 的 Docker 构建忽略规则。
 
 ### 8. Agnes 图像生成与 CN 渠道
 

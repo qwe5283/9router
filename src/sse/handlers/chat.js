@@ -2,6 +2,7 @@ import "open-sse/index.js";
 
 import {
   getProviderCredentials,
+  recordAccountError,
   markAccountUnavailable,
   clearAccountError,
   extractApiKey,
@@ -321,6 +322,15 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
     }
 
     // Use shared chatCore
+    let requestErrorRecorded = false;
+    const recordRequestError = async (status, message) => {
+      requestErrorRecorded = true;
+      try {
+        await recordAccountError(credentials.connectionId, status, message);
+      } catch (error) {
+        log.warn("CHAT", `Failed to record connection error: ${error.message}`);
+      }
+    };
     const providerThinking = (chatSettings.providerThinking || {})[provider] || null;
     const result = await handleChatCore({
       body: { ...body, model: `${provider}/${model}` },
@@ -365,10 +375,15 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
         await clearAccountError(credentials.connectionId, credentials, model);
         // "Consecutive" strikes: a success clears the breaker for this pair.
         clearAntigravityStrikes(credentials.connectionId, model);
-      }
+      },
+      onRequestError: fallbackEnabled ? null : recordRequestError,
     });
 
-    if (!fallbackEnabled || result.success) return finish(result.response);
+    if (!fallbackEnabled) {
+      if (!result.success && !requestErrorRecorded) await recordRequestError(result.status, result.error);
+      return finish(result.response);
+    }
+    if (result.success) return result.response;
 
     // Antigravity 409/429: refresh live quota to get exact resetAt before locking
     let quotaResetMs = null;
