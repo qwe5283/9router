@@ -1643,7 +1643,7 @@ export default function ProviderDetailPage() {
                 </div>
               )}
               {isCompatible && (
-                <div className="flex items-center gap-2" title="默认开启。关闭后仅请求当前密钥，不重试或回退，并原样返回上游响应（包括 HTTP 和 SSE 错误）；Combo 也不会切换到其他模型。">
+                <div className="flex items-center gap-2" title="默认开启。关闭后仅请求当前密钥，不在此提供商内重试或回退，并原样返回上游响应（包括 HTTP 和 SSE 错误）；多模型 Combo 仍按组合规则尝试后续模型。">
                   <span className="text-xs text-text-muted font-medium">回退</span>
                   <Toggle
                     ariaLabel="回退"

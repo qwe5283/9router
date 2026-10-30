@@ -1,4 +1,5 @@
-// Internal routing metadata. Never expose control flags in client-facing headers.
+// Provider-level fallback metadata; multi-member Combos apply their own policy.
+// Never expose control flags in client-facing headers.
 const noFallbackResponses = new WeakSet();
 
 export function disableResponseFallback(response) {

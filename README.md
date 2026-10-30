@@ -204,15 +204,16 @@ docker compose down
 
 - 为兼容 Provider 增加“回退”开关，默认开启，保持上游默认行为。
 - 关闭后仅请求当前账号和上游地址，不再执行同地址重试、备用地址切换、Token 刷新重试或多账号切换。
-- 上游错误按原始 HTTP 状态、响应头和响应体返回，包括 SSE 错误。
-- 请求来自 Combo 时也不会自动切换到其他模型。
+- 直接调用和单成员 Combo 仍按原始 HTTP 状态、响应头和响应体返回上游结果，包括 SSE 错误。
+- 多成员 Combo 的模型切换独立于 Provider 回退开关：当前成员失败或未产生有效内容时，仍按 Combo 现有规则尝试后续成员；只关闭当前 Provider 内部的重试与账号回退。
 - 原样返回上游响应的同时，继续记录请求状态和用量信息。
-- 关闭回退后仍记录聊天请求的 HTTP、网络及可识别的 SSE 错误，将最近错误前 200 字符、错误码和时间保存到连接，供 Dashboard 展示；只记录诊断，不新增冷却锁或触发重试、账号及 Combo 切换，后续成功请求可清除错误。
+- 关闭回退后仍记录聊天请求的 HTTP、网络及可识别的 SSE 错误，将最近错误前 200 字符、错误码和时间保存到连接，供 Dashboard 展示；记录动作不新增冷却锁或触发 Provider 内重试、账号切换，后续成功请求可清除错误。
 
 关联 commit：
 
-- [d6524c27](https://github.com/qwe5283/9router/commit/d6524c27135fb370ee50d9a2b9a44c579a4437be)：回退开关、原始错误响应，以及账号和 Combo 回退控制。
-- 关闭回退后的错误记录修复：实现见 [聊天处理器](./src/sse/handlers/chat.js)、[连接错误记录](./src/sse/services/auth.js) 和 [透传响应观察](./open-sse/handlers/chatCore/passthroughHandler.js)，验证见 [回归测试](./tests/unit/chat-fallback-disabled-errors.test.js)。修复 commit 的真实哈希链接在推送前补齐。
+- [d6524c27](https://github.com/qwe5283/9router/commit/d6524c27135fb370ee50d9a2b9a44c579a4437be)：Provider 回退开关和原始错误响应的初始实现；Combo 层行为以后续修复为准。
+- [d5cde049](https://github.com/qwe5283/9router/commit/d5cde049b380f6cb87c7c2a68fd14b9d62d7621d)：补齐关闭回退后的 HTTP、网络和 SSE 错误记录，保留原始响应及后续成功清除错误的行为。
+- 本次 Combo 回退解耦尚未提交：实现见 [Combo 路由](./open-sse/services/combo.js)，验证见 [Combo 回归测试](./tests/unit/combo-fallback-disabled.test.js) 和 [聊天入口回归测试](./tests/unit/chat-fallback-disabled-errors.test.js)。提交产生真实哈希后、推送前补齐 commit 链接。
 
 ### 4. 自定义 Provider 头像
 
@@ -281,10 +282,10 @@ docker compose down
 “透传”和“回退”是两个独立开关：
 
 - **只开启透传，保持回退开启**：当前 Provider 失败后，Combo 仍可切换到后续模型。若后续节点也开启透传，它们收到的同样是原始请求体，因此客户端请求格式必须与相应上游接口兼容。
-- **开启透传并关闭回退**：不再进行同地址重试、备用地址切换、失败后的 Token 刷新重试或多账号切换；当前节点返回响应后，Combo 也不会继续尝试后续模型。
-- 关闭回退只禁止失败后的兜底，不会取消 Combo 对本次请求起始模型的轮询、粘性或 Smart 选择。
+- **开启透传并关闭回退**：当前 Provider 不再进行同地址重试、备用地址切换、失败后的 Token 刷新重试或多账号切换；多成员 Combo 仍按现有错误和空响应规则尝试后续模型。
+- 关闭 Provider 回退不会取消 Combo 对本次请求起始模型的轮询、粘性或 Smart 选择，也不会禁止 Combo 层的模型切换。
 
-需要原始厂商字段和错误响应时，可以关闭回退；需要 Combo 容灾时，应保持回退开启。
+需要原始厂商字段和单节点错误响应时，可以关闭 Provider 回退；同时使用多成员 Combo 时，最终响应仍由组合规则决定，无需为了 Combo 容灾开启 Provider 内部回退。
 
 ### 2. 单模型 Combo 可以当作自定义模型 ID 的一对一映射吗？
 
@@ -304,16 +305,17 @@ docker compose down
 
 ### 4. Combo 列表混合选择开启和关闭回退的模型时，关闭回退的节点会短路 Combo 吗？
 
-会，但准确地说，该节点的响应会被视为**终止响应**，而不是被改判为“正常响应”：
+不会。Provider 的回退开关仅控制该 Provider 内部的重试和账号切换，多成员 Combo 独立决定是否尝试后续成员：
 
 ```text
-Combo：A（允许回退） → B（禁止回退） → C（允许回退）
+Combo：A（Provider 回退开启） → B（Provider 回退关闭） → C（Provider 回退开启）
 ```
 
 - A 返回可回退的错误：继续尝试 B。
-- B 返回成功或 HTTP/SSE 错误：都直接返回 B，不再尝试 C。
-- B 的错误状态、响应头和响应体仍会保留，并跳过 Combo 的空响应探测与后续回退。
+- B 返回符合 Combo 回退规则的 HTTP 错误：继续尝试 C；不会因此恢复 B 内部的重试或多账号切换。
+- B 的 SSE 在输出有效内容前结束且没有有效内容，或 JSON 响应为空：按 Combo 既有空响应规则决定是否尝试 C。
+- B 已输出有效内容：返回 B；流式响应开始输出有效内容后发生的错误，不再切换到 C。内容过滤等原有不重试规则继续生效。
 
-此短路针对节点已经返回的 HTTP `Response`。如果节点因网络或执行故障抛出未包装成 `Response` 的异常，Combo 的异常捕获仍可能继续尝试后续模型；因此“关闭回退”不保证所有异常场景下都绝对只请求一个 Combo 成员。
+直接调用以及只有一个成员的 Combo 保持原有行为：关闭 Provider 回退后原样返回该节点的响应，不额外探测 SSE 内容。多成员 Combo 的全部失败结果按组合原有规则返回，不保证原样返回某个成员的错误。`fusion` 采用独立的并行汇总流程，不适用以上逐个切换规则。
 
 **安全提示**：原样透传上游错误可能将厂商诊断信息暴露给客户端；对外提供服务前，应确认客户端有权查看这些信息。

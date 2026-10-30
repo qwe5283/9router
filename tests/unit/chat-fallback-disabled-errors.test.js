@@ -3,6 +3,7 @@ import "../translator/registerAll.js";
 
 const state = vi.hoisted(() => ({
   connections: [],
+  comboModels: null,
   fallbackEnabled: false,
   execute: vi.fn(),
   update: vi.fn(),
@@ -31,7 +32,7 @@ vi.mock("@/sse/services/model.js", () => ({
     const [provider, model] = name.split("/");
     return { provider, model };
   },
-  getComboModels: async () => null,
+  getComboModels: async (name) => name === "test-combo" ? state.comboModels : null,
 }));
 vi.mock("@/sse/services/keyAccess.js", () => ({
   getKeyAccessContext: async () => null,
@@ -69,6 +70,7 @@ beforeEach(() => {
   state.update.mockReset();
   state.execute.mockReset();
   state.fallbackEnabled = false;
+  state.comboModels = null;
   state.connections = ["openai-compatible-test", "anthropic-compatible-test"].map((provider) => ({
     id: `${provider}-connection`, provider, authType: "apikey", apiKey: "test-key",
     name: "Test", isActive: true, testStatus: "active",
@@ -81,10 +83,11 @@ beforeEach(() => {
   });
 });
 
-const chat = (provider = "openai-compatible-test", stream = false) => handleChat(new Request("https://router.test/v1/chat/completions", {
+const requestChat = (model, stream = false) => handleChat(new Request("https://router.test/v1/chat/completions", {
   method: "POST", headers: { "content-type": "application/json" },
-  body: JSON.stringify({ model: `${provider}/test-model`, stream, messages: [{ role: "user", content: "hello" }] }),
+  body: JSON.stringify({ model, stream, messages: [{ role: "user", content: "hello" }] }),
 }));
+const chat = (provider = "openai-compatible-test", stream = false) => requestChat(`${provider}/test-model`, stream);
 
 describe("chat connection errors with fallback disabled", () => {
   it.each(["openai-compatible-test", "anthropic-compatible-test"])("%s records an HTTP error while preserving the original response", async (provider) => {
@@ -222,5 +225,48 @@ describe("chat connection errors with fallback disabled", () => {
     expect((await chat()).status).toBe(503);
     expect(state.connections[0]).toMatchObject({ testStatus: "unavailable", errorCode: 429 });
     expect(state.connections[0]["modelLock_test-model"]).toBeTruthy();
+  });
+
+  it.each([400, 429])("lets a Combo advance after HTTP %s without retrying the current provider", async (status) => {
+    state.comboModels = ["openai-compatible-test/first-model", "anthropic-compatible-test/next-model"];
+    state.connections.push({ ...state.connections[0], id: "unused-backup-connection", name: "Backup" });
+    const raw = JSON.stringify({ error: { message: "first provider failed" } });
+    const served = '{"choices":[{"message":{"content":"served by next provider"}}]}';
+    state.execute
+      .mockResolvedValueOnce({ response: new Response(raw, { status, headers: { "content-type": "application/json" } }) })
+      .mockResolvedValueOnce({ response: new Response(served, { headers: { "content-type": "application/json" } }) });
+
+    expect(await (await requestChat("test-combo")).text()).toBe(served);
+    expect(state.execute.mock.calls.map(([args]) => [args.model, args.credentials.connectionId])).toEqual([
+      ["first-model", "openai-compatible-test-connection"],
+      ["next-model", "anthropic-compatible-test-connection"],
+    ]);
+    expect(state.connections[0]).toMatchObject({ lastError: "first provider failed", errorCode: status });
+    expect(Object.keys(state.connections[0]).some((key) => key.startsWith("modelLock_"))).toBe(false);
+  });
+
+  it("lets a Combo advance after an error-only SSE response and keeps the connection diagnostic", async () => {
+    state.comboModels = ["openai-compatible-test/first-model", "anthropic-compatible-test/next-model"];
+    const raw = 'event: error\ndata: {"error":{"message":"stream rejected","status":429}}\n\n';
+    const served = '{"choices":[{"message":{"content":"served by next provider"}}]}';
+    state.execute
+      .mockResolvedValueOnce({ response: new Response(raw, { headers: { "content-type": "text/event-stream" } }) })
+      .mockResolvedValueOnce({ response: new Response(served, { headers: { "content-type": "application/json" } }) });
+
+    expect(await (await requestChat("test-combo", true)).text()).toBe(served);
+    expect(state.execute).toHaveBeenCalledTimes(2);
+    expect(state.connections[0]).toMatchObject({ lastError: "stream rejected", errorCode: 429 });
+  });
+
+  it("preserves a single-member Combo's raw error response", async () => {
+    state.comboModels = ["openai-compatible-test/test-model"];
+    const raw = '{ "error": { "message": "original failure", "vendor_field": 42 } }\n';
+    state.execute.mockResolvedValueOnce({ response: new Response(raw, { status: 429, headers: { "retry-after": "37" } }) });
+    const response = await requestChat("test-combo");
+    expect(response.status).toBe(429);
+    expect(response.headers.get("retry-after")).toBe("37");
+    expect(await response.text()).toBe(raw);
+    expect(state.execute).toHaveBeenCalledOnce();
+    expect(state.connections[0].lastError).toBe("original failure");
   });
 });

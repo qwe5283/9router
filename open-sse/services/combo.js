@@ -476,7 +476,9 @@ export async function handleComboChat({
     try {
       const result = await handleSingleModel(body, modelStr);
 
-      if (isResponseFallbackDisabled(result)) return result;
+      // A lone candidate keeps the provider's raw-response behavior. With multiple
+      // candidates, provider-level retry policy must not suppress Combo failover.
+      if (rotatedModels.length === 1 && isResponseFallbackDisabled(result)) return result;
       
       // Success (2xx). A 2xx is necessary but NOT sufficient: Gemini aborts (e.g.
       // MALFORMED_FUNCTION_CALL) still return 200 and stream empty content, which would
